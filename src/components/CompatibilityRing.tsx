@@ -14,17 +14,17 @@ export function CompatibilityRing({ score, size = 'sm' }: CompatibilityRingProps
 
   const strokeColor =
     clamped >= 80
-      ? 'stroke-emerald-600'
+      ? 'stroke-emerald-600 dark:stroke-emerald-500'
       : clamped >= 60
-        ? 'stroke-amber-500'
-        : 'stroke-rose-600';
+        ? 'stroke-amber-500 dark:stroke-amber-400'
+        : 'stroke-rose-600 dark:stroke-rose-500';
 
   const textColor =
     clamped >= 80
-      ? 'text-emerald-700'
+      ? 'text-emerald-700 dark:text-emerald-400'
       : clamped >= 60
-        ? 'text-amber-700'
-        : 'text-rose-700';
+        ? 'text-amber-700 dark:text-amber-400'
+        : 'text-rose-700 dark:text-rose-400';
 
   return (
     <div
@@ -45,7 +45,7 @@ export function CompatibilityRing({ score, size = 'sm' }: CompatibilityRingProps
           r={radius}
           fill="none"
           strokeWidth={strokeWidth}
-          className="stroke-stone-200"
+          className="stroke-stone-200 dark:stroke-slate-700"
         />
         <circle
           cx={dimension / 2}

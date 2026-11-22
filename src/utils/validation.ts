@@ -4,6 +4,7 @@ export type SignUpErrors = Partial<Record<keyof SignUpInput, string>>;
 export type LoginErrors = Partial<Record<keyof LoginInput, string>>;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^[+\d][\d\s\-()]{6,20}$/;
 
 export function validateName(name: string): string | undefined {
   const trimmed = name.trim();
@@ -60,6 +61,15 @@ export function validateCollege(college: string): string | undefined {
   return undefined;
 }
 
+export function validatePhone(phone?: string): string | undefined {
+  const trimmed = (phone || '').trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > 25 || !PHONE_REGEX.test(trimmed)) {
+    return 'Please enter a valid phone number (e.g. +91 98765 43210).';
+  }
+  return undefined;
+}
+
 export function validateCity(city: string): string | undefined {
   const trimmed = city.trim();
   if (!trimmed) {
@@ -86,8 +96,13 @@ export function validateSignUpForm(data: SignUpInput): SignUpErrors {
   const passwordError = validatePassword(data.password);
   if (passwordError) errors.password = passwordError;
 
-  const collegeError = validateCollege(data.college);
-  if (collegeError) errors.college = collegeError;
+  if (data.role === 'student') {
+    const collegeError = validateCollege(data.college || '');
+    if (collegeError) errors.college = collegeError;
+  } else {
+    const phoneError = validatePhone(data.phone);
+    if (phoneError) errors.phone = phoneError;
+  }
 
   const cityError = validateCity(data.city);
   if (cityError) errors.city = cityError;
@@ -106,6 +121,20 @@ export function validateLoginForm(data: LoginInput): LoginErrors {
   }
 
   return errors;
+}
+
+export function isSafeImageUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.length > 500) return false;
+  if (trimmed.startsWith('/src/assets/') || trimmed.startsWith('/assets/')) {
+    return true;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 export function getFriendlyAuthError(error: unknown): string {

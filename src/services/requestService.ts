@@ -11,6 +11,8 @@ import {
 } from 'firebase/firestore';
 import { ensureChatForAcceptedRequest } from './chatService';
 import { auth, db, handleFirestoreError, isFirebaseConfigured, OperationType } from './firebase';
+import { ensureDemoListingInFirestore } from './listingService';
+import { getDemoOwnerPhone, getOwnerPublicProfile } from './ownerProfileService';
 import { ensureDemoProfileInFirestore, getProfile } from './profileService';
 import type { ConnectRequest, RequestStatus } from './types';
 
@@ -66,6 +68,9 @@ function scheduleDemoAutoAccept(
   const timerId = window.setTimeout(async () => {
     demoAutoAcceptTimers.delete(req.id);
 
+    const isOwnerDemo = req.toUserId.startsWith('demo_owner_');
+    const demoOwnerPhone = isOwnerDemo ? getDemoOwnerPhone(req.toUserId) : undefined;
+
     const useFirestore =
       isFirebaseConfigured &&
       db &&
@@ -74,10 +79,14 @@ function scheduleDemoAutoAccept(
 
     if (useFirestore && db) {
       const requestPath = `requests/${req.id}`;
-      const acceptPayload = {
+      const acceptPayload: Record<string, unknown> = {
         status: 'accepted' as const,
         updatedAt: serverTimestamp(),
       };
+      if (demoOwnerPhone) {
+        acceptPayload.ownerPhone = demoOwnerPhone;
+      }
+
       try {
         const reqRef = doc(db, 'requests', req.id);
         const snap = await getDoc(reqRef);
@@ -85,8 +94,11 @@ function scheduleDemoAutoAccept(
           return;
         }
 
-        // Ensure receiver demo profile exists in Firestore with isDemo: true
-        await ensureDemoProfileInFirestore(req.toUserId);
+        if (isOwnerDemo && req.listingId) {
+          await ensureDemoListingInFirestore(req.listingId);
+        } else {
+          await ensureDemoProfileInFirestore(req.toUserId);
+        }
 
         // Step 1: Accept request FIRST in Firestore
         await updateDoc(reqRef, acceptPayload);
@@ -94,20 +106,31 @@ function scheduleDemoAutoAccept(
         const accepted: ConnectRequest = {
           ...req,
           status: 'accepted',
+          ownerPhone: demoOwnerPhone,
           updatedAt: new Date().toISOString(),
         };
 
-        const demoProfile = await getProfile(req.toUserId);
-        const firstName = demoProfile?.basics.name.split(' ')[0] || 'Hey';
-        const city = demoProfile?.housing.preferredCity || 'campus';
+        let targetName = 'Hey';
+        let welcomeText = '';
+        if (isOwnerDemo) {
+          const demoOwner = await getOwnerPublicProfile(req.toUserId);
+          targetName = demoOwner?.name || 'Property Owner';
+          const listingLabel = req.listingTitle ? `"${req.listingTitle}"` : 'this listing';
+          welcomeText = `Hi! Thanks for your enquiry about ${listingLabel}. It is currently available—let me know when you'd like to schedule an in-person visit!`;
+        } else {
+          const demoProfile = await getProfile(req.toUserId);
+          targetName = demoProfile?.basics.name || 'Hey';
+          const city = demoProfile?.housing.preferredCity || 'campus';
+          welcomeText = `Hi! Thanks for reaching out—I'd love to chat about finding a place in ${city}. When are you planning to move in?`;
+        }
 
         // Step 2 & 3: Create chat document SECOND, then create welcome message THIRD
         await ensureChatForAcceptedRequest(accepted, {
           senderId: req.toUserId,
-          text: `Hi! Thanks for reaching out—I'd love to chat about finding a place in ${city}. When are you planning to move in?`,
+          text: welcomeText,
         });
 
-        onDemoAccepted?.(demoProfile?.basics.name || firstName);
+        onDemoAccepted?.(targetName);
         return;
       } catch (error) {
         console.error('Firestore demo auto-accept failed:', {
@@ -133,6 +156,7 @@ function scheduleDemoAutoAccept(
     const accepted: ConnectRequest = {
       ...current,
       status: 'accepted',
+      ownerPhone: demoOwnerPhone,
       updatedAt: nowIso,
     };
 
@@ -140,43 +164,82 @@ function scheduleDemoAutoAccept(
     writeLocalRequests(nextList);
     notifyRequests();
 
-    const demoProfile = await getProfile(req.toUserId);
-    const firstName = demoProfile?.basics.name.split(' ')[0] || 'Hey';
-    const city = demoProfile?.housing.preferredCity || 'campus';
+    let targetName = 'Hey';
+    let welcomeText = '';
+    if (isOwnerDemo) {
+      const demoOwner = await getOwnerPublicProfile(req.toUserId);
+      targetName = demoOwner?.name || 'Property Owner';
+      const listingLabel = req.listingTitle ? `"${req.listingTitle}"` : 'this listing';
+      welcomeText = `Hi! Thanks for your enquiry about ${listingLabel}. It is currently available—let me know when you'd like to schedule an in-person visit!`;
+    } else {
+      const demoProfile = await getProfile(req.toUserId);
+      targetName = demoProfile?.basics.name || 'Hey';
+      const city = demoProfile?.housing.preferredCity || 'campus';
+      welcomeText = `Hi! Thanks for reaching out—I'd love to chat about finding a place in ${city}. When are you planning to move in?`;
+    }
 
     await ensureChatForAcceptedRequest(accepted, {
       senderId: req.toUserId,
-      text: `Hi! Thanks for reaching out—I'd love to chat about finding a place in ${city}. When are you planning to move in?`,
+      text: welcomeText,
     });
 
-    onDemoAccepted?.(demoProfile?.basics.name || firstName);
+    onDemoAccepted?.(targetName);
   }, 5000);
 
   demoAutoAcceptTimers.set(req.id, timerId);
+}
+
+export interface SendConnectRequestOptions {
+  listingId?: string;
+  listingTitle?: string;
+  onDemoAccepted?: (demoName: string) => void;
 }
 
 export async function sendConnectRequest(
   fromUserId: string,
   toUserId: string,
   message: string,
-  onDemoAccepted?: (demoName: string) => void,
+  onDemoAcceptedOrOptions?: ((demoName: string) => void) | SendConnectRequestOptions,
 ): Promise<ConnectRequest> {
   if (fromUserId === toUserId) {
     throw new Error('You cannot send a connect request to yourself.');
   }
 
-  const localExisting = readLocalRequests().find(
-    (r) =>
-      ((r.fromUserId === fromUserId && r.toUserId === toUserId) ||
-        (r.fromUserId === toUserId && r.toUserId === fromUserId)) &&
-      (r.status === 'pending' || r.status === 'accepted'),
-  );
+  const opts: SendConnectRequestOptions =
+    typeof onDemoAcceptedOrOptions === 'function'
+      ? { onDemoAccepted: onDemoAcceptedOrOptions }
+      : onDemoAcceptedOrOptions || {};
+
+  const listingId = opts.listingId?.trim() || undefined;
+  const listingTitle = opts.listingTitle?.trim().slice(0, 140) || undefined;
+  const onDemoAccepted = opts.onDemoAccepted;
+
+  const requestId = listingId
+    ? `${fromUserId}__${toUserId}__${listingId}`
+    : `${fromUserId}__${toUserId}`;
+  const reverseId = listingId
+    ? `${toUserId}__${fromUserId}__${listingId}`
+    : `${toUserId}__${fromUserId}`;
+
+  const localExisting = readLocalRequests().find((r) => {
+    const sameScope = listingId
+      ? r.listingId === listingId &&
+        ((r.fromUserId === fromUserId && r.toUserId === toUserId) ||
+          (r.fromUserId === toUserId && r.toUserId === fromUserId))
+      : !r.listingId &&
+        ((r.fromUserId === fromUserId && r.toUserId === toUserId) ||
+          (r.fromUserId === toUserId && r.toUserId === fromUserId));
+    return sameScope && (r.status === 'pending' || r.status === 'accepted');
+  });
+
   if (localExisting) {
-    throw new Error('A request or connection already exists between you two.');
+    throw new Error(
+      listingId
+        ? 'You already have an active enquiry for this listing.'
+        : 'A request or connection already exists between you two.',
+    );
   }
 
-  const requestId = `${fromUserId}__${toUserId}`;
-  const reverseId = `${toUserId}__${fromUserId}`;
   const cleanMessage = message.trim().slice(0, 300);
   const nowIso = new Date().toISOString();
 
@@ -186,6 +249,8 @@ export async function sendConnectRequest(
     toUserId,
     status: 'pending',
     message: cleanMessage,
+    ...(listingId ? { listingId } : {}),
+    ...(listingTitle ? { listingTitle } : {}),
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -206,13 +271,19 @@ export async function sendConnectRequest(
       toUserId,
       status: 'pending',
       message: cleanMessage,
+      ...(listingId ? { listingId } : {}),
+      ...(listingTitle ? { listingTitle } : {}),
       createdAt: 'serverTimestamp()',
       updatedAt: 'serverTimestamp()',
     };
 
     try {
       if (isDemoTarget) {
-        await ensureDemoProfileInFirestore(toUserId);
+        if (listingId) {
+          await ensureDemoListingInFirestore(listingId);
+        } else {
+          await ensureDemoProfileInFirestore(toUserId);
+        }
       }
 
       const [existingSnap, reverseSnap] = await Promise.all([
@@ -230,10 +301,14 @@ export async function sendConnectRequest(
       if (existingSnap.exists()) {
         const curStatus = existingSnap.data().status;
         if (curStatus === 'pending' || curStatus === 'accepted') {
-          throw new Error('A request or connection already exists between you two.');
+          throw new Error(
+            listingId
+              ? 'You already have an active enquiry for this listing.'
+              : 'A request or connection already exists between you two.',
+          );
         }
         if (curStatus === 'declined') {
-          throw new Error('This connect request was previously declined.');
+          throw new Error('This request was previously declined.');
         }
         if (curStatus === 'cancelled') {
           operation = 'updateDoc';
@@ -258,6 +333,8 @@ export async function sendConnectRequest(
           toUserId,
           status: 'pending',
           message: cleanMessage,
+          ...(listingId ? { listingId } : {}),
+          ...(listingTitle ? { listingTitle } : {}),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -291,7 +368,6 @@ export async function sendConnectRequest(
       if (!isOfflineError(error)) {
         throw error;
       }
-      // Fall through to localStorage fallback when offline
     }
   }
 
@@ -310,6 +386,7 @@ export async function updateRequestStatus(
   request: ConnectRequest,
   actorUserId: string,
   nextStatus: Extract<RequestStatus, 'accepted' | 'declined' | 'cancelled'>,
+  ownerPhone?: string,
 ): Promise<ConnectRequest> {
   const pendingTimer = demoAutoAcceptTimers.get(request.id);
   if (pendingTimer !== undefined) {
@@ -317,9 +394,15 @@ export async function updateRequestStatus(
     demoAutoAcceptTimers.delete(request.id);
   }
 
+  const cleanPhone =
+    nextStatus === 'accepted' && ownerPhone?.trim()
+      ? ownerPhone.trim().slice(0, 25)
+      : undefined;
+
   const updated: ConnectRequest = {
     ...request,
     status: nextStatus,
+    ...(cleanPhone ? { ownerPhone: cleanPhone } : {}),
     updatedAt: new Date().toISOString(),
   };
 
@@ -330,15 +413,15 @@ export async function updateRequestStatus(
     auth.currentUser.uid === actorUserId
   ) {
     const path = `requests/${request.id}`;
-    const logPayload = {
+    const updatePayload: Record<string, unknown> = {
       status: nextStatus,
-      updatedAt: 'serverTimestamp()',
+      updatedAt: serverTimestamp(),
     };
+    if (cleanPhone) {
+      updatePayload.ownerPhone = cleanPhone;
+    }
     try {
-      await updateDoc(doc(db, 'requests', request.id), {
-        status: nextStatus,
-        updatedAt: serverTimestamp(),
-      });
+      await updateDoc(doc(db, 'requests', request.id), updatePayload);
       if (nextStatus === 'accepted') {
         await ensureChatForAcceptedRequest(updated);
       }
@@ -346,7 +429,7 @@ export async function updateRequestStatus(
     } catch (error) {
       console.error('Firestore updateRequestStatus failed:', {
         path,
-        payload: logPayload,
+        payload: { ...updatePayload, updatedAt: 'serverTimestamp()' },
         actorUserId,
         authUid: auth.currentUser?.uid ?? null,
         emailVerified: auth.currentUser?.emailVerified ?? null,
@@ -408,6 +491,9 @@ export function subscribeToUserRequests(
       toUserId: String(data.toUserId),
       status: data.status as RequestStatus,
       message: String(data.message || ''),
+      ...(data.listingId ? { listingId: String(data.listingId) } : {}),
+      ...(data.listingTitle ? { listingTitle: String(data.listingTitle) } : {}),
+      ...(data.ownerPhone ? { ownerPhone: String(data.ownerPhone) } : {}),
       createdAt:
         data.createdAt && typeof (data.createdAt as { toDate?: () => Date }).toDate === 'function'
           ? (data.createdAt as { toDate: () => Date }).toDate().toISOString()

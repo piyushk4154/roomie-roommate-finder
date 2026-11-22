@@ -7,7 +7,7 @@ import {
   updateProfile,
   type User,
 } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getFriendlyAuthError } from '../utils/validation';
 import { auth, db, handleFirestoreError, isFirebaseConfigured, OperationType } from './firebase';
 import {
@@ -16,10 +16,12 @@ import {
   localLogout,
   localResetPassword,
   localSignUp,
+  localUpdateUser,
   setLocalSessionUser,
   subscribeLocalAuth,
 } from './localStorageFallback';
-import type { LoginInput, SignUpInput, StudentUser } from './types';
+import { ensureOwnerPublicProfileOnSignUp } from './ownerProfileService';
+import type { AccountRole, LoginInput, SignUpInput, StudentUser } from './types';
 
 const FIREBASE_UNAVAILABLE_CODES = new Set([
   'auth/operation-not-allowed',
@@ -45,6 +47,10 @@ function isPermissionDeniedError(error: unknown): boolean {
   return code === 'permission-denied' || message.includes('missing or insufficient permissions');
 }
 
+function normalizeRole(role: unknown): AccountRole {
+  return role === 'owner' ? 'owner' : 'student';
+}
+
 async function fetchUserProfile(firebaseUser: User): Promise<StudentUser> {
   const cached = pendingProfiles.get(firebaseUser.uid);
   if (cached) {
@@ -54,9 +60,11 @@ async function fetchUserProfile(firebaseUser: User): Promise<StudentUser> {
   if (!db) {
     return {
       uid: firebaseUser.uid,
-      name: firebaseUser.displayName || 'Student',
+      name: firebaseUser.displayName || 'User',
       email: firebaseUser.email || '',
+      role: 'student',
       college: '',
+      phone: '',
       city: '',
     };
   }
@@ -68,9 +76,11 @@ async function fetchUserProfile(firebaseUser: User): Promise<StudentUser> {
       const data = snapshot.data();
       return {
         uid: String(data.uid || firebaseUser.uid),
-        name: String(data.name || firebaseUser.displayName || 'Student'),
+        name: String(data.name || firebaseUser.displayName || 'User'),
         email: String(data.email || firebaseUser.email || ''),
+        role: normalizeRole(data.role),
         college: String(data.college || ''),
+        phone: String(data.phone || ''),
         city: String(data.city || ''),
       };
     }
@@ -78,7 +88,6 @@ async function fetchUserProfile(firebaseUser: User): Promise<StudentUser> {
     if (isPermissionDeniedError(error)) {
       handleFirestoreError(error, OperationType.GET, userPath);
     }
-    // If offline or temporarily unreachable, fall back gracefully to Auth profile / local cache
     const localMatch = getLocalSessionUser();
     if (localMatch && localMatch.uid === firebaseUser.uid) {
       return localMatch;
@@ -87,24 +96,33 @@ async function fetchUserProfile(firebaseUser: User): Promise<StudentUser> {
 
   return {
     uid: firebaseUser.uid,
-    name: firebaseUser.displayName || 'Student',
+    name: firebaseUser.displayName || 'User',
     email: firebaseUser.email || '',
+    role: 'student',
     college: '',
+    phone: '',
     city: '',
   };
 }
 
 export async function signUpWithEmail(input: SignUpInput): Promise<StudentUser> {
+  const role = normalizeRole(input.role);
   const cleanInput: SignUpInput = {
+    role,
     name: input.name.trim(),
     email: input.email.trim().toLowerCase(),
     password: input.password,
-    college: input.college.trim(),
+    college: role === 'student' ? (input.college || '').trim() : '',
+    phone: role === 'owner' ? (input.phone || '').trim() : '',
     city: input.city.trim(),
   };
 
   if (!isFirebaseConfigured || !auth || !db) {
-    return localSignUp(cleanInput);
+    const localUser = await localSignUp(cleanInput);
+    if (localUser.role === 'owner') {
+      await ensureOwnerPublicProfileOnSignUp(localUser);
+    }
+    return localUser;
   }
 
   try {
@@ -118,7 +136,9 @@ export async function signUpWithEmail(input: SignUpInput): Promise<StudentUser> 
       uid: credential.user.uid,
       name: cleanInput.name,
       email: cleanInput.email,
-      college: cleanInput.college,
+      role,
+      college: cleanInput.college || '',
+      phone: cleanInput.phone || '',
       city: cleanInput.city,
     };
 
@@ -134,7 +154,9 @@ export async function signUpWithEmail(input: SignUpInput): Promise<StudentUser> 
         uid: credential.user.uid,
         name: cleanInput.name,
         email: cleanInput.email,
-        college: cleanInput.college,
+        role,
+        college: cleanInput.college || '',
+        phone: cleanInput.phone || '',
         city: cleanInput.city,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -149,11 +171,19 @@ export async function signUpWithEmail(input: SignUpInput): Promise<StudentUser> 
       }
     }
 
+    if (role === 'owner') {
+      await ensureOwnerPublicProfileOnSignUp(userProfile);
+    }
+
     setLocalSessionUser(userProfile);
     return userProfile;
   } catch (error) {
     if (isFirebaseUnavailableError(error)) {
-      return localSignUp(cleanInput);
+      const localUser = await localSignUp(cleanInput);
+      if (localUser.role === 'owner') {
+        await ensureOwnerPublicProfileOnSignUp(localUser);
+      }
+      return localUser;
     }
     throw new Error(getFriendlyAuthError(error));
   }
@@ -179,6 +209,51 @@ export async function loginWithEmail(input: LoginInput): Promise<StudentUser> {
   }
 }
 
+export async function updateUserAccount(
+  currentUser: StudentUser,
+  updates: { name: string; city: string; phone?: string; college?: string },
+): Promise<StudentUser> {
+  const cleanUpdates = {
+    name: updates.name.trim().slice(0, 80),
+    city: updates.city.trim().slice(0, 80),
+    phone: (updates.phone ?? currentUser.phone ?? '').trim().slice(0, 25),
+    college: (updates.college ?? currentUser.college ?? '').trim().slice(0, 120),
+  };
+
+  const nextUser: StudentUser = {
+    ...currentUser,
+    ...cleanUpdates,
+    updatedAt: new Date().toISOString(),
+  };
+
+  pendingProfiles.set(currentUser.uid, nextUser);
+
+  if (isFirebaseConfigured && db && auth?.currentUser && auth.currentUser.uid === currentUser.uid) {
+    const userPath = `users/${currentUser.uid}`;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        name: cleanUpdates.name,
+        city: cleanUpdates.city,
+        phone: cleanUpdates.phone,
+        college: cleanUpdates.college,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      if (isPermissionDeniedError(error)) {
+        handleFirestoreError(error, OperationType.UPDATE, userPath);
+      }
+      const msg = error instanceof Error ? error.message.toLowerCase() : '';
+      if (!msg.includes('offline') && !msg.includes('unavailable')) {
+        throw error;
+      }
+    }
+  }
+
+  await localUpdateUser(currentUser.uid, cleanUpdates);
+  setLocalSessionUser(nextUser);
+  return nextUser;
+}
+
 export async function sendForgotPassword(email: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
 
@@ -194,7 +269,6 @@ export async function sendForgotPassword(email: string): Promise<void> {
       await localResetPassword(cleanEmail);
       return;
     }
-    // Avoid leaking account existence for user-not-found on reset
     if (
       error &&
       typeof error === 'object' &&
@@ -242,9 +316,11 @@ export function subscribeToAuthChanges(callback: (user: StudentUser | null) => v
       } catch {
         const fallbackProfile: StudentUser = {
           uid: firebaseUser.uid,
-          name: firebaseUser.displayName || 'Student',
+          name: firebaseUser.displayName || 'User',
           email: firebaseUser.email || '',
+          role: 'student',
           college: '',
+          phone: '',
           city: '',
         };
         callback(fallbackProfile);
@@ -252,7 +328,6 @@ export function subscribeToAuthChanges(callback: (user: StudentUser | null) => v
       return;
     }
 
-    // If Firebase Auth has no active user, check if a fallback localStorage session exists
     callback(getLocalSessionUser());
   });
 

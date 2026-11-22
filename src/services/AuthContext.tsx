@@ -5,6 +5,7 @@ import {
   sendForgotPassword,
   signUpWithEmail,
   subscribeToAuthChanges,
+  updateUserAccount,
 } from './authService';
 import type { LoginInput, SignUpInput, StudentUser } from './types';
 
@@ -15,6 +16,12 @@ interface AuthContextValue {
   login: (input: LoginInput) => Promise<StudentUser>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateAccount: (updates: {
+    name: string;
+    city: string;
+    phone?: string;
+    college?: string;
+  }) => Promise<StudentUser>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -52,8 +59,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sendForgotPassword(email);
   };
 
+  const updateAccount = async (updates: {
+    name: string;
+    city: string;
+    phone?: string;
+    college?: string;
+  }): Promise<StudentUser> => {
+    if (!user) {
+      throw new Error('You must be signed in to update your account.');
+    }
+    const updated = await updateUserAccount(user, updates);
+    setUser(updated);
+    return updated;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, login, logout, resetPassword }}>
+    <AuthContext.Provider
+      value={{ user, loading, signUp, login, logout, resetPassword, updateAccount }}
+    >
       {children}
     </AuthContext.Provider>
   );

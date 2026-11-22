@@ -10,6 +10,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { DEMO_PROFILES } from '../data/demoProfiles';
+import { normalizeRoommateCountPref } from '../utils/matching';
 import { auth, db, handleFirestoreError, isFirebaseConfigured, OperationType } from './firebase';
 import type {
   ProfileBasics,
@@ -54,6 +55,7 @@ export function createDefaultProfileDraft(
       preferredArea: '',
       moveInDate: '2026-12-01',
       roommateGenderPref: 'any',
+      roommateCount: 'flexible',
     },
     lifestyle: {
       smoking: 'never',
@@ -81,6 +83,7 @@ export function createDefaultProfileDraft(
       studyHabits: 3,
       diet: 3,
       pets: 3,
+      roommateCount: 3,
     },
     dealBreakers: [],
     savedAt: new Date().toISOString(),
@@ -123,7 +126,25 @@ export function loadProfileDraft(userId: string): ProfileDraft | null {
   try {
     const raw = window.localStorage.getItem(`${DRAFT_PREFIX}${userId}`);
     if (!raw) return null;
-    return JSON.parse(raw) as ProfileDraft;
+    const parsed = JSON.parse(raw) as ProfileDraft;
+    const defaults = createDefaultProfileDraft();
+    return {
+      ...defaults,
+      ...parsed,
+      basics: { ...defaults.basics, ...(parsed.basics || {}) },
+      housing: {
+        ...defaults.housing,
+        ...(parsed.housing || {}),
+        roommateCount: normalizeRoommateCountPref(parsed.housing?.roommateCount),
+      },
+      lifestyle: { ...defaults.lifestyle, ...(parsed.lifestyle || {}) },
+      importance: {
+        ...defaults.importance,
+        ...(parsed.importance || {}),
+        roommateCount: parsed.importance?.roommateCount ?? 3,
+      },
+      dealBreakers: Array.isArray(parsed.dealBreakers) ? parsed.dealBreakers : [],
+    };
   } catch {
     return null;
   }
@@ -177,9 +198,63 @@ export async function ensureDemoProfileInFirestore(userId: string): Promise<void
   }
 }
 
+const DEMO_PROFILE_MAP = new Map(DEMO_PROFILES.map((p) => [p.userId, p]));
+
+function normalizeWeight(value: unknown, fallback = 3): 1 | 2 | 3 | 4 | 5 {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5) {
+    return value as 1 | 2 | 3 | 4 | 5;
+  }
+  return fallback as 1 | 2 | 3 | 4 | 5;
+}
+
+function normalizeProfile(data: Record<string, unknown>, fallbackUserId: string): RoommateProfile {
+  const userId = String(data.userId || fallbackUserId);
+  const isDemo = Boolean(data.isDemo);
+  const demoFallback = isDemo ? DEMO_PROFILE_MAP.get(userId) : undefined;
+  const rawHousing = (data.housing || {}) as Partial<ProfileHousing>;
+  const rawImportance = (data.importance || {}) as Partial<ProfileImportance>;
+
+  const roommateCount =
+    rawHousing.roommateCount !== undefined
+      ? normalizeRoommateCountPref(rawHousing.roommateCount)
+      : demoFallback?.housing.roommateCount ?? 'flexible';
+
+  const updatedAtRaw = data.updatedAt as { toDate?: () => Date } | string | undefined;
+
+  return {
+    userId,
+    basics: data.basics as ProfileBasics,
+    housing: {
+      ...(rawHousing as ProfileHousing),
+      roommateCount,
+    },
+    lifestyle: data.lifestyle as ProfileLifestyle,
+    importance: {
+      ...(rawImportance as ProfileImportance),
+      roommateCount: normalizeWeight(
+        rawImportance.roommateCount,
+        demoFallback?.importance.roommateCount ?? 3,
+      ),
+    },
+    dealBreakers: ((data.dealBreakers || []) as RoommateProfile['dealBreakers']),
+    isComplete: Boolean(data.isComplete),
+    isDemo,
+    updatedAt:
+      updatedAtRaw && typeof updatedAtRaw === 'object' && typeof updatedAtRaw.toDate === 'function'
+        ? updatedAtRaw.toDate().toISOString()
+        : String(updatedAtRaw || new Date().toISOString()),
+  };
+}
+
 export async function seedDemoProfiles(): Promise<void> {
   const existing = readLocalMap(DEMO_SEEDED_KEY);
-  if (Object.keys(existing).length < DEMO_PROFILES.length) {
+  const needsLocalRefresh =
+    Object.keys(existing).length < DEMO_PROFILES.length ||
+    Object.values(existing).some(
+      (p) =>
+        p.housing?.roommateCount === undefined || p.importance?.roommateCount === undefined,
+    );
+  if (needsLocalRefresh) {
     const map: Record<string, RoommateProfile> = {};
     for (const profile of DEMO_PROFILES) {
       map[profile.userId] = profile;
@@ -245,21 +320,8 @@ export async function getProfile(userId: string): Promise<RoommateProfile | null
     try {
       const snap = await getDoc(doc(db, 'profiles', userId));
       if (snap.exists()) {
-        const data = snap.data();
-        const normalized: RoommateProfile = {
-          userId: String(data.userId || userId),
-          basics: data.basics as ProfileBasics,
-          housing: data.housing as ProfileHousing,
-          lifestyle: data.lifestyle as ProfileLifestyle,
-          importance: data.importance as ProfileImportance,
-          dealBreakers: (data.dealBreakers || []) as RoommateProfile['dealBreakers'],
-          isComplete: Boolean(data.isComplete),
-          isDemo: Boolean(data.isDemo),
-          updatedAt:
-            data.updatedAt && typeof data.updatedAt.toDate === 'function'
-              ? data.updatedAt.toDate().toISOString()
-              : String(data.updatedAt || new Date().toISOString()),
-        };
+        const data = snap.data() as Record<string, unknown>;
+        const normalized = normalizeProfile(data, userId);
         localProfiles[userId] = normalized;
         writeLocalMap(PROFILES_KEY, localProfiles);
         return normalized;
@@ -270,12 +332,27 @@ export async function getProfile(userId: string): Promise<RoommateProfile | null
       }
       // Fall back to localStorage copy when offline
       if (localProfiles[userId]) {
-        return localProfiles[userId];
+        return normalizeProfile(localProfiles[userId] as unknown as Record<string, unknown>, userId);
       }
     }
   }
 
-  return localProfiles[userId] || null;
+  return localProfiles[userId]
+    ? normalizeProfile(localProfiles[userId] as unknown as Record<string, unknown>, userId)
+    : null;
+}
+
+const profileRefreshListeners = new Set<() => void>();
+
+export function subscribeToProfileRefresh(listener: () => void): () => void {
+  profileRefreshListeners.add(listener);
+  return () => {
+    profileRefreshListeners.delete(listener);
+  };
+}
+
+function notifyProfileRefresh(): void {
+  profileRefreshListeners.forEach((listener) => listener());
 }
 
 export async function saveProfile(
@@ -306,10 +383,14 @@ export async function saveProfile(
       preferredArea: input.housing.preferredArea.trim().slice(0, 120),
       moveInDate: input.housing.moveInDate.slice(0, 20),
       roommateGenderPref: input.housing.roommateGenderPref,
+      roommateCount: normalizeRoommateCountPref(input.housing.roommateCount),
     },
     lifestyle: input.lifestyle,
-    importance: input.importance,
-    dealBreakers: input.dealBreakers.slice(0, 8),
+    importance: {
+      ...input.importance,
+      roommateCount: normalizeWeight(input.importance?.roommateCount, 3),
+    },
+    dealBreakers: input.dealBreakers.slice(0, 9),
     isComplete: input.isComplete,
     isDemo: false,
   };
@@ -322,12 +403,19 @@ export async function saveProfile(
 
   if (isFirebaseConfigured && db && auth?.currentUser && auth.currentUser.uid === userId) {
     const path = `profiles/${userId}`;
+    const firestorePayload = {
+      ...sanitized,
+      updatedAt: serverTimestamp(),
+    };
     try {
-      await setDoc(doc(db, 'profiles', userId), {
-        ...sanitized,
-        updatedAt: serverTimestamp(),
-      });
+      await setDoc(doc(db, 'profiles', userId), firestorePayload);
     } catch (error) {
+      console.error('Firestore saveProfile failed:', {
+        path,
+        payload: { ...sanitized, updatedAt: 'serverTimestamp()' },
+        authUid: auth.currentUser?.uid ?? null,
+        error,
+      });
       if (isPermissionDenied(error)) {
         handleFirestoreError(error, OperationType.WRITE, path);
       }
@@ -342,6 +430,7 @@ export async function saveProfile(
   localProfiles[userId] = savedLocal;
   writeLocalMap(PROFILES_KEY, localProfiles);
   clearProfileDraft(userId);
+  notifyProfileRefresh();
 
   return savedLocal;
 }
@@ -361,7 +450,10 @@ export async function getAllMatchableProfiles(): Promise<RoommateProfile[]> {
   const localProfiles = readLocalMap(PROFILES_KEY);
   Object.values(localProfiles).forEach((profile) => {
     if (profile.isComplete) {
-      merged.set(profile.userId, profile);
+      merged.set(
+        profile.userId,
+        normalizeProfile(profile as unknown as Record<string, unknown>, profile.userId),
+      );
     }
   });
 
@@ -371,21 +463,8 @@ export async function getAllMatchableProfiles(): Promise<RoommateProfile[]> {
       const q = query(collection(db, 'profiles'), where('isComplete', '==', true));
       const snap = await getDocs(q);
       snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        const profile: RoommateProfile = {
-          userId: String(data.userId || docSnap.id),
-          basics: data.basics as ProfileBasics,
-          housing: data.housing as ProfileHousing,
-          lifestyle: data.lifestyle as ProfileLifestyle,
-          importance: data.importance as ProfileImportance,
-          dealBreakers: (data.dealBreakers || []) as RoommateProfile['dealBreakers'],
-          isComplete: Boolean(data.isComplete),
-          isDemo: Boolean(data.isDemo),
-          updatedAt:
-            data.updatedAt && typeof data.updatedAt.toDate === 'function'
-              ? data.updatedAt.toDate().toISOString()
-              : String(data.updatedAt || new Date().toISOString()),
-        };
+        const data = docSnap.data() as Record<string, unknown>;
+        const profile = normalizeProfile(data, docSnap.id);
         merged.set(profile.userId, profile);
       });
     } catch (error) {

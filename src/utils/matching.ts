@@ -2,6 +2,7 @@ import type {
   DealBreakerKey,
   LifestyleTraitKey,
   ProfileLifestyle,
+  RoommateCountPref,
   RoommateProfile,
 } from '../services/types';
 
@@ -37,9 +38,13 @@ const TRAIT_LABELS: Record<LifestyleTraitKey, string> = {
   studyHabits: 'Study habits',
   diet: 'Diet',
   pets: 'Pets',
+  roommateCount: 'Roommate count',
 };
 
-const ORDINAL_INDEX: Record<Exclude<LifestyleTraitKey, 'cleanliness'>, Record<string, number>> = {
+const ORDINAL_INDEX: Record<
+  Exclude<LifestyleTraitKey, 'cleanliness' | 'roommateCount'>,
+  Record<string, number>
+> = {
   smoking: { never: 0, occasionally: 1, regularly: 2 },
   drinking: { never: 0, socially: 1, regularly: 2 },
   sleepSchedule: { early_bird: 0, flexible: 1, night_owl: 2 },
@@ -76,9 +81,27 @@ const VALUE_LABELS: Record<string, string> = {
   dislikes_allergic: 'Dislikes / allergic',
 };
 
+export function normalizeRoommateCountPref(value: unknown): RoommateCountPref {
+  if (value === 1 || value === 2 || value === 3 || value === 4) {
+    return value;
+  }
+  return 'flexible';
+}
+
+export function formatRoommateCountLabel(value: RoommateCountPref | unknown): string {
+  const normalized = normalizeRoommateCountPref(value);
+  if (normalized === 'flexible') return 'Flexible (any number)';
+  if (normalized === 1) return '1 roommate';
+  if (normalized === 4) return '4+ roommates';
+  return `${normalized} roommates`;
+}
+
 export function formatTraitAnswer(key: LifestyleTraitKey, value: string | number): string {
   if (key === 'cleanliness') {
     return `${value} / 5`;
+  }
+  if (key === 'roommateCount') {
+    return formatRoommateCountLabel(value);
   }
   return VALUE_LABELS[String(value)] || String(value);
 }
@@ -130,6 +153,14 @@ function checkViewerDealBreakers(viewer: RoommateProfile, candidate: RoommatePro
     return 'Cleanliness deal-breaker (low tidiness rating)';
   }
 
+  if (breakers.has('different_group_size')) {
+    const vCount = normalizeRoommateCountPref(viewer.housing?.roommateCount);
+    const cCount = normalizeRoommateCountPref(candidate.housing?.roommateCount);
+    if (vCount !== 'flexible' && cCount !== 'flexible' && vCount !== cCount) {
+      return 'Group size deal-breaker (different number of roommates)';
+    }
+  }
+
   return null;
 }
 
@@ -169,6 +200,19 @@ function checkCompatibilityExclusion(a: RoommateProfile, b: RoommateProfile): st
   return null;
 }
 
+export function computeRoommateCountSimilarity(
+  aCount: unknown,
+  bCount: unknown,
+): number {
+  const a = normalizeRoommateCountPref(aCount);
+  const b = normalizeRoommateCountPref(bCount);
+  if (a === b) return 1;
+  if (a === 'flexible' || b === 'flexible') return 0.8;
+  const diff = Math.abs(a - b);
+  if (diff === 1) return 0.5;
+  return 0;
+}
+
 /**
  * Computes similarity (0 to 1) for a single lifestyle trait between two profiles.
  */
@@ -177,6 +221,9 @@ export function computeTraitSimilarity(
   aLife: ProfileLifestyle,
   bLife: ProfileLifestyle,
 ): number {
+  if (key === 'roommateCount') {
+    return 1;
+  }
   if (key === 'cleanliness') {
     return Math.max(0, 1 - Math.abs(aLife.cleanliness - bLife.cleanliness) / 4);
   }
@@ -192,6 +239,24 @@ export function computeTraitSimilarity(
   return 0;
 }
 
+function getTraitSimilarityForProfiles(
+  key: LifestyleTraitKey,
+  a: RoommateProfile,
+  b: RoommateProfile,
+): number {
+  if (key === 'roommateCount') {
+    return computeRoommateCountSimilarity(a.housing?.roommateCount, b.housing?.roommateCount);
+  }
+  return computeTraitSimilarity(key, a.lifestyle, b.lifestyle);
+}
+
+function getRawTraitValue(profile: RoommateProfile, key: LifestyleTraitKey): string | number {
+  if (key === 'roommateCount') {
+    return normalizeRoommateCountPref(profile.housing?.roommateCount);
+  }
+  return profile.lifestyle[key];
+}
+
 /**
  * Step 2: Weighted score from viewer's perspective (0-100).
  */
@@ -201,7 +266,7 @@ function computeDirectionalScore(viewer: RoommateProfile, candidate: RoommatePro
   let totalWeight = 0;
 
   for (const key of keys) {
-    const similarity = computeTraitSimilarity(key, viewer.lifestyle, candidate.lifestyle);
+    const similarity = getTraitSimilarityForProfiles(key, viewer, candidate);
     const weight = viewer.importance?.[key] ?? 3;
     weightedSum += similarity * weight;
     totalWeight += weight;
@@ -216,7 +281,27 @@ function buildTraitExplanation(
   yourAnswer: string,
   theirAnswer: string,
   status: BreakdownStatus,
+  yourRaw?: string | number,
+  theirRaw?: string | number,
 ): string {
+  if (key === 'roommateCount') {
+    const y = normalizeRoommateCountPref(yourRaw);
+    const t = normalizeRoommateCountPref(theirRaw);
+    if (y === 'flexible' && t === 'flexible') {
+      return 'You are both flexible on the number of roommates.';
+    }
+    if (y === t) {
+      return `You both prefer ${formatRoommateCountLabel(y)}.`;
+    }
+    if (y === 'flexible') {
+      return `You are flexible on roommate count, they prefer ${formatRoommateCountLabel(t)}.`;
+    }
+    if (t === 'flexible') {
+      return `You prefer ${formatRoommateCountLabel(y)}, they are flexible on roommate count.`;
+    }
+    return `You prefer ${formatRoommateCountLabel(y)}, they prefer ${formatRoommateCountLabel(t)}.`;
+  }
+
   const label = TRAIT_LABELS[key].toLowerCase();
   if (status === 'match') {
     return `You both selected ${yourAnswer.toLowerCase()} for ${label}.`;
@@ -271,16 +356,14 @@ export function compareProfiles(
 
   const keys = Object.keys(TRAIT_LABELS) as LifestyleTraitKey[];
   const breakdown: TraitBreakdownItem[] = keys.map((key) => {
-    const similarity = computeTraitSimilarity(
-      key,
-      currentProfile.lifestyle,
-      otherProfile.lifestyle,
-    );
+    const similarity = getTraitSimilarityForProfiles(key, currentProfile, otherProfile);
     const status: BreakdownStatus =
       similarity >= 0.85 ? 'match' : similarity >= 0.45 ? 'partial' : 'mismatch';
 
-    const yourAnswer = formatTraitAnswer(key, currentProfile.lifestyle[key]);
-    const theirAnswer = formatTraitAnswer(key, otherProfile.lifestyle[key]);
+    const yourRaw = getRawTraitValue(currentProfile, key);
+    const theirRaw = getRawTraitValue(otherProfile, key);
+    const yourAnswer = formatTraitAnswer(key, yourRaw);
+    const theirAnswer = formatTraitAnswer(key, theirRaw);
 
     return {
       key,
@@ -289,7 +372,7 @@ export function compareProfiles(
       theirAnswer,
       similarity,
       status,
-      explanation: buildTraitExplanation(key, yourAnswer, theirAnswer, status),
+      explanation: buildTraitExplanation(key, yourAnswer, theirAnswer, status, yourRaw, theirRaw),
     };
   });
 

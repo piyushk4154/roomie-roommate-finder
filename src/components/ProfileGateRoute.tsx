@@ -34,9 +34,9 @@ export function ProfileGateRoute({ children }: { children: ReactNode }) {
 
   if (checking) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex flex-col items-center justify-center px-4">
-        <div className="inline-flex items-center gap-3 text-stone-600 text-sm font-medium">
-          <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" aria-hidden="true" />
+      <div className="min-h-screen bg-[#f8f7f4] dark:bg-slate-950 flex flex-col items-center justify-center px-4">
+        <div className="inline-flex items-center gap-3 text-stone-600 dark:text-slate-300 text-sm font-medium">
+          <Loader2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400 animate-spin" aria-hidden="true" />
           <span>Loading your Roomie profile...</span>
         </div>
       </div>

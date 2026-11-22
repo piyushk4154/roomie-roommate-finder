@@ -9,14 +9,14 @@ export interface AvatarPreset {
 }
 
 export const AVATAR_PRESETS: AvatarPreset[] = [
-  { id: 'preset:1', label: 'Morning Sun', bgClass: 'bg-amber-100', textClass: 'text-amber-800', icon: Sun },
-  { id: 'preset:2', label: 'Chai & Mug', bgClass: 'bg-rose-100', textClass: 'text-rose-800', icon: Coffee },
-  { id: 'preset:3', label: 'Headphones', bgClass: 'bg-indigo-100', textClass: 'text-indigo-800', icon: Headphones },
-  { id: 'preset:4', label: 'Bookworm', bgClass: 'bg-emerald-100', textClass: 'text-emerald-800', icon: BookOpen },
-  { id: 'preset:5', label: 'Night Owl', bgClass: 'bg-slate-200', textClass: 'text-slate-800', icon: Moon },
-  { id: 'preset:6', label: 'Plant Lover', bgClass: 'bg-teal-100', textClass: 'text-teal-800', icon: Leaf },
-  { id: 'preset:7', label: 'Explorer', bgClass: 'bg-sky-100', textClass: 'text-sky-800', icon: Compass },
-  { id: 'preset:8', label: 'Cozy Home', bgClass: 'bg-violet-100', textClass: 'text-violet-800', icon: Home },
+  { id: 'preset:1', label: 'Morning Sun', bgClass: 'bg-amber-100 dark:bg-amber-900/50', textClass: 'text-amber-800 dark:text-amber-200', icon: Sun },
+  { id: 'preset:2', label: 'Chai & Mug', bgClass: 'bg-rose-100 dark:bg-rose-900/50', textClass: 'text-rose-800 dark:text-rose-200', icon: Coffee },
+  { id: 'preset:3', label: 'Headphones', bgClass: 'bg-indigo-100 dark:bg-indigo-900/50', textClass: 'text-indigo-800 dark:text-indigo-200', icon: Headphones },
+  { id: 'preset:4', label: 'Bookworm', bgClass: 'bg-emerald-100 dark:bg-emerald-900/50', textClass: 'text-emerald-800 dark:text-emerald-200', icon: BookOpen },
+  { id: 'preset:5', label: 'Night Owl', bgClass: 'bg-slate-200 dark:bg-slate-700', textClass: 'text-slate-800 dark:text-slate-100', icon: Moon },
+  { id: 'preset:6', label: 'Plant Lover', bgClass: 'bg-teal-100 dark:bg-teal-900/50', textClass: 'text-teal-800 dark:text-teal-200', icon: Leaf },
+  { id: 'preset:7', label: 'Explorer', bgClass: 'bg-sky-100 dark:bg-sky-900/50', textClass: 'text-sky-800 dark:text-sky-200', icon: Compass },
+  { id: 'preset:8', label: 'Cozy Home', bgClass: 'bg-violet-100 dark:bg-violet-900/50', textClass: 'text-violet-800 dark:text-violet-200', icon: Home },
 ];
 
 interface AvatarProps {
@@ -66,7 +66,7 @@ export function Avatar({ name, avatar = 'initials', size = 'md' }: AvatarProps) 
 
   return (
     <div
-      className={`inline-flex items-center justify-center rounded-2xl shrink-0 font-display font-bold bg-indigo-100 text-indigo-800 ${sizeClasses}`}
+      className={`inline-flex items-center justify-center rounded-2xl shrink-0 font-display font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200 ${sizeClasses}`}
       aria-label={`${name} initials`}
     >
       {getInitials(name)}

@@ -14,7 +14,11 @@ import { DashboardNavbar } from '../components/DashboardNavbar';
 import { Footer } from '../components/Footer';
 import { formatINR } from '../components/ProfileFormWizard';
 import { useAuth } from '../services/AuthContext';
-import { getAllMatchableProfiles, getProfile } from '../services/profileService';
+import {
+  getAllMatchableProfiles,
+  getProfile,
+  subscribeToProfileRefresh,
+} from '../services/profileService';
 import { getBlockedUserIdSet, subscribeToBlocks } from '../services/safetyService';
 import type { GenderOption, RoommateProfile } from '../services/types';
 import { getMatches, type MatchComparisonResult } from '../utils/matching';
@@ -114,8 +118,12 @@ export function MatchesPage() {
       }
     }
     void load();
+    const unsubRefresh = subscribeToProfileRefresh(() => {
+      void load();
+    });
     return () => {
       active = false;
+      unsubRefresh();
     };
   }, [user?.uid]);
 
@@ -198,11 +206,11 @@ export function MatchesPage() {
   const renderFilterControls = () => (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-base font-bold text-indigo-950">Filters</h2>
+        <h2 className="font-display text-base font-bold text-indigo-950 dark:text-slate-100">Filters</h2>
         <button
           type="button"
           onClick={resetFilters}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:underline cursor-pointer"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 dark:text-indigo-400 hover:underline cursor-pointer"
         >
           <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
           <span>Reset filters</span>
@@ -210,12 +218,12 @@ export function MatchesPage() {
       </div>
 
       <div>
-        <label htmlFor="filter-search" className="block text-xs font-semibold text-stone-700 mb-1.5">
+        <label htmlFor="filter-search" className="block text-xs font-semibold text-stone-700 dark:text-slate-300 mb-1.5">
           Search name or college
         </label>
         <div className="relative">
           <Search
-            className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2"
+            className="w-4 h-4 text-stone-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"
             aria-hidden="true"
           />
           <input
@@ -224,20 +232,20 @@ export function MatchesPage() {
             value={filters.search}
             onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
             placeholder="e.g. Aarav, IIT..."
-            className="w-full min-h-[42px] rounded-xl border border-stone-300 pl-9 pr-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
+            className="w-full min-h-[42px] rounded-xl border border-stone-300 dark:border-slate-700 pl-9 pr-3 py-2 text-sm bg-white dark:bg-slate-950 text-stone-900 dark:text-slate-100 placeholder:text-stone-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
           />
         </div>
       </div>
 
       <div>
-        <label htmlFor="filter-city" className="block text-xs font-semibold text-stone-700 mb-1.5">
+        <label htmlFor="filter-city" className="block text-xs font-semibold text-stone-700 dark:text-slate-300 mb-1.5">
           City
         </label>
         <select
           id="filter-city"
           value={filters.city}
           onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
-          className="w-full min-h-[42px] rounded-xl border border-stone-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
+          className="w-full min-h-[42px] rounded-xl border border-stone-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-950 text-stone-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
         >
           <option value="all">All cities</option>
           {availableCities.map((city) => (
@@ -249,7 +257,7 @@ export function MatchesPage() {
       </div>
 
       <div>
-        <label htmlFor="filter-college" className="block text-xs font-semibold text-stone-700 mb-1.5">
+        <label htmlFor="filter-college" className="block text-xs font-semibold text-stone-700 dark:text-slate-300 mb-1.5">
           College filter
         </label>
         <input
@@ -258,16 +266,16 @@ export function MatchesPage() {
           value={filters.college}
           onChange={(e) => setFilters((f) => ({ ...f, college: e.target.value }))}
           placeholder="Filter by university..."
-          className="w-full min-h-[42px] rounded-xl border border-stone-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
+          className="w-full min-h-[42px] rounded-xl border border-stone-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-950 text-stone-900 dark:text-slate-100 placeholder:text-stone-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
         />
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label htmlFor="filter-budget" className="text-xs font-semibold text-stone-700">
+          <label htmlFor="filter-budget" className="text-xs font-semibold text-stone-700 dark:text-slate-300">
             Max starting budget
           </label>
-          <span className="text-xs font-bold text-indigo-700 tabular-nums">
+          <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">
             Up to {formatINR(filters.maxBudget)}
           </span>
         </div>
@@ -284,7 +292,7 @@ export function MatchesPage() {
       </div>
 
       <div>
-        <label htmlFor="filter-gender" className="block text-xs font-semibold text-stone-700 mb-1.5">
+        <label htmlFor="filter-gender" className="block text-xs font-semibold text-stone-700 dark:text-slate-300 mb-1.5">
           Gender
         </label>
         <select
@@ -293,7 +301,7 @@ export function MatchesPage() {
           onChange={(e) =>
             setFilters((f) => ({ ...f, gender: e.target.value as FilterState['gender'] }))
           }
-          className="w-full min-h-[42px] rounded-xl border border-stone-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
+          className="w-full min-h-[42px] rounded-xl border border-stone-300 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-950 text-stone-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
         >
           <option value="all">Any gender</option>
           <option value="male">Male</option>
@@ -304,10 +312,10 @@ export function MatchesPage() {
 
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label htmlFor="filter-score" className="text-xs font-semibold text-stone-700">
+          <label htmlFor="filter-score" className="text-xs font-semibold text-stone-700 dark:text-slate-300">
             Minimum compatibility
           </label>
-          <span className="text-xs font-bold text-indigo-700 tabular-nums">{filters.minScore}%+</span>
+          <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{filters.minScore}%+</span>
         </div>
         <input
           id="filter-score"
@@ -324,15 +332,15 @@ export function MatchesPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4] text-stone-900 flex flex-col">
+    <div className="min-h-screen bg-[#f8f7f4] dark:bg-slate-950 text-stone-900 dark:text-slate-100 flex flex-col">
       <DashboardNavbar />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         {safetyBannerVisible && (
-          <div className="mb-6 bg-indigo-50/90 border border-indigo-200 rounded-2xl px-4 py-3.5 flex items-start justify-between gap-3">
+          <div className="mb-6 bg-indigo-50/90 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-900 rounded-2xl px-4 py-3.5 flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <ShieldCheck className="w-5 h-5 text-indigo-700 shrink-0 mt-0.5" aria-hidden="true" />
-              <p className="text-xs sm:text-sm text-indigo-950 leading-relaxed">
+              <ShieldCheck className="w-5 h-5 text-indigo-700 dark:text-indigo-400 shrink-0 mt-0.5" aria-hidden="true" />
+              <p className="text-xs sm:text-sm text-indigo-950 dark:text-indigo-100 leading-relaxed">
                 <strong>Stay safe on Roomie:</strong> Always meet prospective roommates in public
                 campus places first, and never send money or share OTPs online before visiting a place.
               </p>
@@ -340,7 +348,7 @@ export function MatchesPage() {
             <button
               type="button"
               onClick={dismissSafetyBanner}
-              className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-indigo-700 hover:bg-indigo-100 shrink-0 cursor-pointer"
+              className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 shrink-0 cursor-pointer"
               aria-label="Dismiss safety tip"
             >
               <X className="w-4 h-4" />
@@ -351,10 +359,10 @@ export function MatchesPage() {
         {/* Top header & sort controls */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-7">
           <div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold text-indigo-950 tracking-tight">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-indigo-950 dark:text-slate-100 tracking-tight">
               Welcome, {myProfile?.basics.name || user?.name || 'Student'}
             </h1>
-            <p className="text-sm text-stone-600 mt-1 tabular-nums">
+            <p className="text-sm text-stone-600 dark:text-slate-300 mt-1 tabular-nums">
               {loading
                 ? 'Finding your compatible roommates...'
                 : `${filteredMatches.length} compatible ${filteredMatches.length === 1 ? 'roommate' : 'roommates'} found`}
@@ -365,7 +373,7 @@ export function MatchesPage() {
             <button
               type="button"
               onClick={() => setHowItWorksOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[42px] rounded-xl bg-white border border-stone-200 text-xs sm:text-sm font-semibold text-stone-700 hover:text-indigo-700 hover:border-indigo-200 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[42px] rounded-xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-700 text-xs sm:text-sm font-semibold text-stone-700 dark:text-slate-200 hover:text-indigo-700 dark:hover:text-indigo-300 hover:border-indigo-200 dark:hover:border-indigo-700 transition-colors cursor-pointer"
             >
               <HelpCircle className="w-4 h-4" aria-hidden="true" />
               <span>How matching works</span>
@@ -374,7 +382,7 @@ export function MatchesPage() {
             <button
               type="button"
               onClick={() => setMobileFiltersOpen(true)}
-              className="lg:hidden inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[42px] rounded-xl bg-white border border-stone-200 text-xs sm:text-sm font-semibold text-stone-700 cursor-pointer"
+              className="lg:hidden inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[42px] rounded-xl bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-700 text-xs sm:text-sm font-semibold text-stone-700 dark:text-slate-200 cursor-pointer"
             >
               <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
               <span>Filters</span>
@@ -386,7 +394,7 @@ export function MatchesPage() {
               onChange={(e) =>
                 setFilters((f) => ({ ...f, sortBy: e.target.value as SortOption }))
               }
-              className="min-h-[42px] rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs sm:text-sm font-semibold text-stone-700 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+              className="min-h-[42px] rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs sm:text-sm font-semibold text-stone-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
             >
               <option value="best_match">Sort: Best match</option>
               <option value="lowest_budget">Sort: Lowest budget</option>
@@ -398,7 +406,7 @@ export function MatchesPage() {
         {loadError && (
           <div
             role="alert"
-            className="mb-6 rounded-2xl bg-rose-50 border border-rose-200 px-5 py-4 text-sm text-rose-800"
+            className="mb-6 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 px-5 py-4 text-sm text-rose-800 dark:text-rose-200"
           >
             {loadError}
           </div>
@@ -406,7 +414,7 @@ export function MatchesPage() {
 
         <div className="flex flex-col lg:flex-row gap-7 items-start">
           {/* Desktop Sidebar */}
-          <aside className="hidden lg:block w-72 shrink-0 bg-white rounded-2xl p-6 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)] sticky top-24">
+          <aside className="hidden lg:block w-72 shrink-0 bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)] dark:shadow-none sticky top-24">
             {renderFilterControls()}
           </aside>
 
@@ -417,29 +425,29 @@ export function MatchesPage() {
                 {[1, 2, 3, 4].map((n) => (
                   <div
                     key={n}
-                    className="bg-white rounded-2xl p-6 shadow-sm animate-pulse space-y-4"
+                    className="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 shadow-sm dark:shadow-none animate-pulse space-y-4"
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-stone-200" />
+                        <div className="w-12 h-12 rounded-2xl bg-stone-200 dark:bg-slate-800" />
                         <div className="space-y-2">
-                          <div className="h-4 w-32 bg-stone-200 rounded" />
-                          <div className="h-3 w-24 bg-stone-200 rounded" />
+                          <div className="h-4 w-32 bg-stone-200 dark:bg-slate-800 rounded" />
+                          <div className="h-3 w-24 bg-stone-200 dark:bg-slate-800 rounded" />
                         </div>
                       </div>
-                      <div className="w-14 h-14 rounded-full bg-stone-200" />
+                      <div className="w-14 h-14 rounded-full bg-stone-200 dark:bg-slate-800" />
                     </div>
-                    <div className="h-3 w-full bg-stone-200 rounded" />
-                    <div className="h-3 w-2/3 bg-stone-200 rounded" />
+                    <div className="h-3 w-full bg-stone-200 dark:bg-slate-800 rounded" />
+                    <div className="h-3 w-2/3 bg-stone-200 dark:bg-slate-800 rounded" />
                   </div>
                 ))}
               </div>
             ) : filteredMatches.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 sm:p-12 text-center shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)]">
-                <h2 className="font-display text-xl font-bold text-indigo-950 mb-2">
+              <div className="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-8 sm:p-12 text-center shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)] dark:shadow-none">
+                <h2 className="font-display text-xl font-bold text-indigo-950 dark:text-slate-100 mb-2">
                   No matches match these filters yet
                 </h2>
-                <p className="text-sm text-stone-600 max-w-md mx-auto leading-relaxed mb-6">
+                <p className="text-sm text-stone-600 dark:text-slate-300 max-w-md mx-auto leading-relaxed mb-6">
                   Try widening your maximum budget, lowering the minimum compatibility threshold, or
                   clearing city and college filters to see more compatible students.
                 </p>
@@ -466,21 +474,21 @@ export function MatchesPage() {
       {/* Mobile Filter Drawer */}
       {mobileFiltersOpen && (
         <div
-          className="fixed inset-0 z-50 lg:hidden flex justify-end bg-stone-950/45 backdrop-blur-xs"
+          className="fixed inset-0 z-50 lg:hidden flex justify-end bg-stone-950/45 dark:bg-black/70 backdrop-blur-xs"
           role="dialog"
           aria-modal="true"
           aria-label="Filter matches"
         >
-          <div className="w-full max-w-xs bg-white h-full overflow-y-auto p-6 shadow-2xl flex flex-col justify-between">
+          <div className="w-full max-w-xs bg-white dark:bg-slate-900 border-l border-transparent dark:border-slate-800 h-full overflow-y-auto p-6 shadow-2xl flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-5">
-                <span className="font-display text-base font-bold text-indigo-950">
+                <span className="font-display text-base font-bold text-indigo-950 dark:text-slate-100">
                   Filter matches
                 </span>
                 <button
                   type="button"
                   onClick={() => setMobileFiltersOpen(false)}
-                  className="w-10 h-10 inline-flex items-center justify-center rounded-xl text-stone-500 hover:bg-stone-100 cursor-pointer"
+                  className="w-10 h-10 inline-flex items-center justify-center rounded-xl text-stone-500 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800 cursor-pointer"
                   aria-label="Close filters"
                 >
                   <X className="w-5 h-5" />
@@ -503,38 +511,38 @@ export function MatchesPage() {
       {/* How Matching Works Modal */}
       {howItWorksOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 backdrop-blur-xs p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 dark:bg-black/70 backdrop-blur-xs p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="how-matching-title"
         >
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+          <div className="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl">
             <div className="flex items-center justify-between gap-4 mb-3">
-              <h2 id="how-matching-title" className="font-display text-lg font-bold text-indigo-950">
+              <h2 id="how-matching-title" className="font-display text-lg font-bold text-indigo-950 dark:text-slate-100">
                 How Roomie matching works
               </h2>
               <button
                 type="button"
                 onClick={() => setHowItWorksOpen(false)}
-                className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-stone-500 hover:bg-stone-100 cursor-pointer"
+                className="w-9 h-9 inline-flex items-center justify-center rounded-xl text-stone-500 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800 cursor-pointer"
                 aria-label="Close modal"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="space-y-3 text-sm text-stone-600 leading-relaxed">
+            <div className="space-y-3 text-sm text-stone-600 dark:text-slate-300 leading-relaxed">
               <p>
-                <strong className="text-indigo-950">1. Deal-breaker check:</strong> Students who
+                <strong className="text-indigo-950 dark:text-slate-100">1. Deal-breaker check:</strong> Students who
                 violate any of your deal-breakers, have a conflicting roommate gender preference, or
                 have a non-overlapping rent budget are automatically excluded.
               </p>
               <p>
-                <strong className="text-indigo-950">2. Weighted lifestyle fit:</strong> Every
+                <strong className="text-indigo-950 dark:text-slate-100">2. Weighted lifestyle fit:</strong> Every
                 lifestyle trait (like sleep schedule, cleanliness, and noise) is compared and
                 multiplied by the 1–5 importance weight you chose.
               </p>
               <p>
-                <strong className="text-indigo-950">3. Mutual compatibility:</strong> Your final
+                <strong className="text-indigo-950 dark:text-slate-100">3. Mutual compatibility:</strong> Your final
                 percentage averages how well they fit your preferences and how well you fit theirs.
               </p>
             </div>
@@ -570,7 +578,7 @@ function MatchProfileCard({
   return (
     <Link
       to={`/dashboard/profile/${profile.userId}`}
-      className="group bg-white rounded-2xl p-6 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)] hover:shadow-[0_10px_28px_-8px_rgba(79,70,229,0.16)] transition-all flex flex-col justify-between gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+      className="group bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 dark:hover:border-indigo-700/60 rounded-2xl p-6 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)] dark:shadow-none hover:shadow-[0_10px_28px_-8px_rgba(79,70,229,0.16)] transition-all flex flex-col justify-between gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
     >
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
@@ -578,19 +586,19 @@ function MatchProfileCard({
             <Avatar name={profile.basics.name} avatar={profile.basics.avatar} size="md" />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-display text-base font-bold text-indigo-950 group-hover:text-indigo-700 transition-colors truncate">
+                <h2 className="font-display text-base font-bold text-indigo-950 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors truncate">
                   {profile.basics.name}, {profile.basics.age}
                 </h2>
                 {profile.isDemo && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[11px] font-semibold">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 text-[11px] font-semibold">
                     Demo
                   </span>
                 )}
               </div>
-              <p className="text-xs font-medium text-stone-600 truncate mt-0.5">
+              <p className="text-xs font-medium text-stone-600 dark:text-slate-300 truncate mt-0.5">
                 {profile.basics.college}
               </p>
-              <p className="text-xs text-stone-500 truncate mt-0.5">
+              <p className="text-xs text-stone-500 dark:text-slate-400 truncate mt-0.5">
                 {profile.housing.preferredCity} · {profile.housing.preferredArea}
               </p>
             </div>
@@ -599,7 +607,7 @@ function MatchProfileCard({
           <CompatibilityRing score={result.score} size="sm" />
         </div>
 
-        <p className="text-sm font-semibold text-stone-800 tabular-nums">
+        <p className="text-sm font-semibold text-stone-800 dark:text-slate-200 tabular-nums">
           {formatINR(profile.housing.budgetMin)} – {formatINR(profile.housing.budgetMax)} / mo
         </p>
 
@@ -608,7 +616,7 @@ function MatchProfileCard({
             {sharedTraits.map((item) => (
               <span
                 key={item.key}
-                className="inline-flex items-center px-2.5 py-1 rounded-lg bg-[#f8f7f4] text-stone-700 text-xs font-medium"
+                className="inline-flex items-center px-2.5 py-1 rounded-lg bg-[#f8f7f4] dark:bg-slate-800 text-stone-700 dark:text-slate-200 text-xs font-medium"
               >
                 {item.trait}: {item.theirAnswer}
               </span>
@@ -617,7 +625,7 @@ function MatchProfileCard({
         )}
       </div>
 
-      <div className="pt-3 border-t border-stone-100 flex items-center justify-between text-xs font-semibold text-indigo-700">
+      <div className="pt-3 border-t border-stone-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-indigo-700 dark:text-indigo-400">
         <span>View lifestyle breakdown</span>
         <span aria-hidden="true">→</span>
       </div>

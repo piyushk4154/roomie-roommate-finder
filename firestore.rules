@@ -11,7 +11,15 @@ service cloud.firestore {
     }
 
     function isDemoUserId(id) {
-      return isValidId(id) && id.matches('^demo_[a-zA-Z0-9_\\-]+$');
+      return isValidId(id) && id.matches('^demo_[a-zA-Z0-9_\\-]+$') && !id.matches('^demo_owner_[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isDemoOwnerId(id) {
+      return isValidId(id) && id.matches('^demo_owner_[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isDemoListingId(id) {
+      return isValidId(id) && id.matches('^demo_listing_[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -30,22 +38,62 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function userDocExists(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function isStudentAccount(uid) {
+      return userDocExists(uid) && (!('role' in userDoc(uid)) || userDoc(uid).role == 'student');
+    }
+
+    function isOwnerAccount(uid) {
+      return userDocExists(uid) && userDoc(uid).role == 'owner';
+    }
+
     function isDemoProfile(userId) {
       return isDemoUserId(userId)
         && exists(/databases/$(database)/documents/profiles/$(userId))
         && get(/databases/$(database)/documents/profiles/$(userId)).data.isDemo == true;
     }
 
+    function isDemoOwnerProfile(userId) {
+      return isDemoOwnerId(userId)
+        && exists(/databases/$(database)/documents/ownerProfiles/$(userId))
+        && get(/databases/$(database)/documents/ownerProfiles/$(userId)).data.isDemo == true;
+    }
+
+    function isDemoTarget(userId) {
+      return isDemoProfile(userId) || isDemoOwnerProfile(userId);
+    }
+
     function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'name', 'email', 'college', 'city', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'name', 'email', 'college', 'city', 'createdAt', 'updatedAt'])
+      return data.keys().hasAll(['uid', 'name', 'email', 'city', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'email', 'role', 'college', 'phone', 'city', 'createdAt', 'updatedAt'])
         && isValidId(data.uid)
         && data.uid == request.auth.uid
         && data.name is string && data.name.size() >= 2 && data.name.size() <= 80
         && data.email is string && data.email.size() >= 5 && data.email.size() <= 120
-        && data.college is string && data.college.size() >= 2 && data.college.size() <= 120
+        && (!('role' in data) || data.role in ['student', 'owner'])
+        && (!('college' in data) || (data.college is string && data.college.size() <= 120))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 25))
         && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
         && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOwnerPublicProfile(data) {
+      return data.keys().hasAll(['userId', 'name', 'city', 'bio', 'avatar', 'isDemo', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'name', 'city', 'bio', 'avatar', 'isDemo', 'updatedAt'])
+        && isValidId(data.userId)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 80
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.bio is string && data.bio.size() <= 300
+        && data.avatar is string && data.avatar.size() >= 1 && data.avatar.size() <= 40
+        && data.isDemo is bool
         && data.updatedAt is timestamp;
     }
 
@@ -65,13 +113,14 @@ service cloud.firestore {
     function isValidHousing(h) {
       return h is map
         && h.keys().hasAll(['budgetMin', 'budgetMax', 'preferredCity', 'preferredArea', 'moveInDate', 'roommateGenderPref'])
-        && h.keys().hasOnly(['budgetMin', 'budgetMax', 'preferredCity', 'preferredArea', 'moveInDate', 'roommateGenderPref'])
+        && h.keys().hasOnly(['budgetMin', 'budgetMax', 'preferredCity', 'preferredArea', 'moveInDate', 'roommateGenderPref', 'roommateCount'])
         && h.budgetMin is int && h.budgetMin >= 2000 && h.budgetMin <= 40000
         && h.budgetMax is int && h.budgetMax >= h.budgetMin && h.budgetMax <= 40000
         && h.preferredCity is string && h.preferredCity.size() >= 2 && h.preferredCity.size() <= 80
         && h.preferredArea is string && h.preferredArea.size() >= 1 && h.preferredArea.size() <= 120
         && h.moveInDate is string && h.moveInDate.size() >= 4 && h.moveInDate.size() <= 20
-        && h.roommateGenderPref in ['any', 'same_gender'];
+        && h.roommateGenderPref in ['any', 'same_gender']
+        && (!('roommateCount' in h) || h.roommateCount in [1, 2, 3, 4, 'flexible']);
     }
 
     function isValidLifestyle(l) {
@@ -113,7 +162,7 @@ service cloud.firestore {
         ])
         && imp.keys().hasOnly([
           'smoking', 'drinking', 'sleepSchedule', 'noiseLevel', 'headphoneUse',
-          'cleanliness', 'guests', 'studyHabits', 'diet', 'pets'
+          'cleanliness', 'guests', 'studyHabits', 'diet', 'pets', 'roommateCount'
         ])
         && isValidWeight(imp.smoking)
         && isValidWeight(imp.drinking)
@@ -124,15 +173,17 @@ service cloud.firestore {
         && isValidWeight(imp.guests)
         && isValidWeight(imp.studyHabits)
         && isValidWeight(imp.diet)
-        && isValidWeight(imp.pets);
+        && isValidWeight(imp.pets)
+        && (!('roommateCount' in imp) || isValidWeight(imp.roommateCount));
     }
 
     function isValidDealBreakers(dbList) {
       return dbList is list
-        && dbList.size() <= 8
+        && dbList.size() <= 9
         && dbList.hasOnly([
           'smoker', 'drinker', 'loud_noise', 'night_owl',
-          'frequent_guests', 'non_veg_cooking', 'pets', 'messy_roommate'
+          'frequent_guests', 'non_veg_cooking', 'pets', 'messy_roommate',
+          'different_group_size'
         ]);
     }
 
@@ -150,14 +201,84 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidListingAddress(addr) {
+      return addr is map
+        && addr.keys().hasAll(['street', 'area', 'city', 'pincode'])
+        && addr.keys().hasOnly(['street', 'area', 'city', 'pincode'])
+        && addr.street is string && addr.street.size() >= 2 && addr.street.size() <= 160
+        && addr.area is string && addr.area.size() >= 2 && addr.area.size() <= 100
+        && addr.city is string && addr.city.size() >= 2 && addr.city.size() <= 80
+        && addr.pincode is string && addr.pincode.size() <= 12;
+    }
+
+    function isValidHouseRules(rules) {
+      return rules is map
+        && rules.keys().hasAll(['smokingAllowed', 'drinkingAllowed', 'guestsAllowed', 'curfewTime', 'vegOnly', 'petsAllowed'])
+        && rules.keys().hasOnly(['smokingAllowed', 'drinkingAllowed', 'guestsAllowed', 'curfewTime', 'vegOnly', 'petsAllowed'])
+        && rules.smokingAllowed is bool
+        && rules.drinkingAllowed is bool
+        && rules.guestsAllowed is bool
+        && rules.curfewTime is string && rules.curfewTime.size() <= 40
+        && rules.vegOnly is bool
+        && rules.petsAllowed is bool;
+    }
+
+    function isValidListing(data) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'ownerName', 'title', 'propertyType', 'address',
+          'rentPerMonth', 'securityDeposit', 'totalBeds', 'availableBeds',
+          'genderAllowed', 'furnished', 'amenities', 'houseRules',
+          'nearbyLandmark', 'availableFrom', 'description', 'photoUrls',
+          'authorizedConfirmed', 'status', 'isDemo', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'ownerName', 'title', 'propertyType', 'address',
+          'rentPerMonth', 'securityDeposit', 'totalBeds', 'availableBeds',
+          'genderAllowed', 'furnished', 'amenities', 'houseRules',
+          'nearbyLandmark', 'availableFrom', 'description', 'photoUrls',
+          'authorizedConfirmed', 'status', 'isDemo', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.ownerId)
+        && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 80
+        && data.title is string && data.title.size() >= 5 && data.title.size() <= 120
+        && data.propertyType in ['single_room', 'shared_room', 'pg', 'flat', 'hostel']
+        && isValidListingAddress(data.address)
+        && data.rentPerMonth is int && data.rentPerMonth > 0 && data.rentPerMonth <= 200000
+        && data.securityDeposit is int && data.securityDeposit >= 0 && data.securityDeposit <= 500000
+        && data.totalBeds is int && data.totalBeds >= 1 && data.totalBeds <= 50
+        && data.availableBeds is int && data.availableBeds >= 0 && data.availableBeds <= data.totalBeds
+        && data.genderAllowed in ['boys', 'girls', 'any']
+        && data.furnished in ['furnished', 'semi', 'unfurnished']
+        && data.amenities is list && data.amenities.size() <= 10
+        && data.amenities.hasOnly([
+          'wifi', 'ac', 'meals', 'laundry', 'parking',
+          'power_backup', 'geyser', 'study_table', 'cctv', 'housekeeping'
+        ])
+        && isValidHouseRules(data.houseRules)
+        && data.nearbyLandmark is string && data.nearbyLandmark.size() <= 120
+        && data.availableFrom is string && data.availableFrom.size() >= 4 && data.availableFrom.size() <= 20
+        && data.description is string && data.description.size() <= 500
+        && data.photoUrls is list && data.photoUrls.size() <= 5
+        && (data.photoUrls.size() == 0 || (data.photoUrls[0] is string && data.photoUrls[0].size() <= 500))
+        && data.authorizedConfirmed == true
+        && data.status in ['active', 'paused', 'rented']
+        && data.isDemo is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     function isValidRequest(data) {
       return data.keys().hasAll(['id', 'fromUserId', 'toUserId', 'status', 'message', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'fromUserId', 'toUserId', 'status', 'message', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'fromUserId', 'toUserId', 'status', 'message', 'listingId', 'listingTitle', 'ownerPhone', 'createdAt', 'updatedAt'])
         && isValidId(data.id)
         && isValidId(data.fromUserId)
         && isValidId(data.toUserId)
         && data.status in ['pending', 'accepted', 'declined', 'cancelled']
         && data.message is string && data.message.size() <= 300
+        && (!('listingId' in data) || isValidId(data.listingId))
+        && (!('listingTitle' in data) || (data.listingTitle is string && data.listingTitle.size() <= 140))
+        && (!('ownerPhone' in data) || (data.ownerPhone is string && data.ownerPhone.size() <= 25))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -179,10 +300,12 @@ service cloud.firestore {
 
     function isValidChat(data) {
       return data.keys().hasAll(['id', 'participantIds', 'requestId', 'lastMessage', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'participantIds', 'requestId', 'lastMessage', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'participantIds', 'requestId', 'listingId', 'listingTitle', 'lastMessage', 'updatedAt'])
         && isValidId(data.id)
         && isValidParticipants(data.participantIds)
         && isValidId(data.requestId)
+        && (!('listingId' in data) || isValidId(data.listingId))
+        && (!('listingTitle' in data) || (data.listingTitle is string && data.listingTitle.size() <= 140))
         && data.lastMessage is string && data.lastMessage.size() <= 1000
         && data.updatedAt is timestamp;
     }
@@ -206,11 +329,16 @@ service cloud.firestore {
 
     function isValidReport(data) {
       return data.keys().hasAll(['id', 'byUserId', 'targetUserId', 'reason', 'notes', 'createdAt'])
-        && data.keys().hasOnly(['id', 'byUserId', 'targetUserId', 'reason', 'notes', 'createdAt'])
+        && data.keys().hasOnly(['id', 'byUserId', 'targetUserId', 'listingId', 'targetType', 'reason', 'notes', 'createdAt'])
         && isValidId(data.id)
         && isValidId(data.byUserId)
         && isValidId(data.targetUserId)
-        && data.reason in ['fake_profile', 'harassment', 'inappropriate_content', 'other']
+        && (!('listingId' in data) || isValidId(data.listingId))
+        && (!('targetType' in data) || data.targetType in ['user', 'listing', 'owner'])
+        && data.reason in [
+          'fake_profile', 'harassment', 'inappropriate_content',
+          'misleading_listing', 'scam_deposit', 'already_rented', 'other'
+        ]
         && data.notes is string && data.notes.size() <= 500
         && data.createdAt is timestamp;
     }
@@ -232,6 +360,7 @@ service cloud.firestore {
         && isOwner(userId)
         && isValidUser(incoming())
         && incoming().uid == userId
+        && ('role' in incoming())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
       allow update: if isSignedIn()
@@ -240,9 +369,39 @@ service cloud.firestore {
         && isValidUser(incoming())
         && incoming().uid == existing().uid
         && incoming().email == existing().email
+        && ((!('role' in existing()) && (!('role' in incoming()) || incoming().role == 'student'))
+            || (('role' in existing()) && incoming().role == existing().role))
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'college', 'city', 'updatedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'college', 'city', 'phone', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(userId) && isOwner(userId);
+    }
+
+    match /ownerProfiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId)
+        && (
+          isOwner(userId)
+          || (resource == null && isDemoOwnerId(userId))
+          || resource != null
+        );
+      allow list: if isSignedIn();
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && isValidOwnerPublicProfile(incoming())
+        && incoming().userId == userId
+        && incoming().updatedAt == request.time
+        && (
+          (isOwner(userId) && incoming().isDemo == false && isOwnerAccount(userId))
+          || (isDemoOwnerId(userId) && incoming().isDemo == true)
+        );
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isOwnerAccount(userId)
+        && isValidOwnerPublicProfile(incoming())
+        && incoming().userId == existing().userId
+        && incoming().isDemo == existing().isDemo
+        && incoming().updatedAt == request.time;
       allow delete: if isSignedIn() && isValidId(userId) && isOwner(userId);
     }
 
@@ -260,17 +419,52 @@ service cloud.firestore {
         && incoming().userId == userId
         && incoming().updatedAt == request.time
         && (
-          (isOwner(userId) && incoming().isDemo == false)
+          (isOwner(userId) && incoming().isDemo == false && isStudentAccount(userId))
           || (isDemoUserId(userId) && incoming().isDemo == true && incoming().isComplete == true)
         );
       allow update: if isSignedIn()
         && isValidId(userId)
         && isOwner(userId)
+        && isStudentAccount(userId)
         && isValidProfile(incoming())
         && incoming().userId == existing().userId
         && incoming().isDemo == existing().isDemo
         && incoming().updatedAt == request.time;
       allow delete: if isSignedIn() && isValidId(userId) && isOwner(userId);
+    }
+
+    match /listings/{listingId} {
+      allow get: if isSignedIn() && isValidId(listingId)
+        && (
+          (resource == null && isDemoListingId(listingId))
+          || (resource != null && (existing().status == 'active' || existing().ownerId == request.auth.uid))
+        );
+      allow list: if isSignedIn()
+        && (resource.data.status == 'active' || resource.data.ownerId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(listingId)
+        && isValidListing(incoming())
+        && incoming().id == listingId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (incoming().ownerId == request.auth.uid && incoming().isDemo == false && isOwnerAccount(request.auth.uid))
+          || (isDemoListingId(listingId) && isDemoOwnerId(incoming().ownerId) && incoming().isDemo == true && incoming().status == 'active')
+        );
+      allow update: if isSignedIn()
+        && isValidId(listingId)
+        && isValidListing(incoming())
+        && existing().ownerId == request.auth.uid
+        && isOwnerAccount(request.auth.uid)
+        && incoming().id == existing().id
+        && incoming().ownerId == existing().ownerId
+        && incoming().isDemo == existing().isDemo
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn()
+        && isValidId(listingId)
+        && existing().ownerId == request.auth.uid
+        && isOwnerAccount(request.auth.uid);
     }
 
     match /requests/{requestId} {
@@ -288,6 +482,8 @@ service cloud.firestore {
         && incoming().fromUserId == request.auth.uid
         && incoming().toUserId != request.auth.uid
         && incoming().status == 'pending'
+        && !('ownerPhone' in incoming())
+        && (!('listingId' in incoming()) || exists(/databases/$(database)/documents/listings/$(incoming().listingId)))
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
       allow update: if isSignedIn()
@@ -296,18 +492,36 @@ service cloud.firestore {
         && incoming().id == existing().id
         && incoming().fromUserId == existing().fromUserId
         && incoming().toUserId == existing().toUserId
+        && ((!('listingId' in existing()) && !('listingId' in incoming()))
+            || ('listingId' in existing() && 'listingId' in incoming() && incoming().listingId == existing().listingId))
+        && ((!('listingTitle' in existing()) && !('listingTitle' in incoming()))
+            || ('listingTitle' in existing() && 'listingTitle' in incoming() && incoming().listingTitle == existing().listingTitle))
         && incoming().updatedAt == request.time
         && (
-          // Standard pending state transitions
+          // Receiver (student or owner) accepts or declines, or demo target auto-accepts
           (
             existing().status == 'pending'
             && incoming().message == existing().message
             && incoming().createdAt == existing().createdAt
-            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
             && (
-              (request.auth.uid == existing().toUserId && (incoming().status == 'accepted' || incoming().status == 'declined'))
-              || (request.auth.uid == existing().fromUserId && incoming().status == 'cancelled')
-              || (request.auth.uid == existing().fromUserId && incoming().status == 'accepted' && isDemoProfile(existing().toUserId))
+              (
+                request.auth.uid == existing().toUserId
+                && (
+                  (incoming().status == 'accepted' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'ownerPhone']))
+                  || (incoming().status == 'declined' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+                )
+              )
+              || (
+                request.auth.uid == existing().fromUserId
+                && incoming().status == 'cancelled'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+              )
+              || (
+                request.auth.uid == existing().fromUserId
+                && incoming().status == 'accepted'
+                && isDemoTarget(existing().toUserId)
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'ownerPhone'])
+              )
             )
           )
           // Re-sending a previously cancelled request from the original sender
@@ -363,7 +577,7 @@ service cloud.firestore {
           incoming().senderId == request.auth.uid
           || (
             incoming().senderId in incoming().participantIds
-            && isDemoProfile(incoming().senderId)
+            && isDemoTarget(incoming().senderId)
           )
         );
       allow update: if isSignedIn()

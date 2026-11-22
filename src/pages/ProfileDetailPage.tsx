@@ -27,7 +27,7 @@ import {
 import { getBlockedUserIdSet, subscribeToBlocks } from '../services/safetyService';
 import { useToast } from '../services/ToastContext';
 import type { ConnectRequest, RoommateProfile } from '../services/types';
-import { compareProfiles } from '../utils/matching';
+import { compareProfiles, formatRoommateCountLabel } from '../utils/matching';
 
 const GENDER_LABELS: Record<string, string> = {
   male: 'Male',
@@ -103,6 +103,7 @@ export function ProfileDetailPage() {
     return (
       requests.find(
         (r) =>
+          !r.listingId &&
           ((r.fromUserId === user.uid && r.toUserId === userId) ||
             (r.fromUserId === userId && r.toUserId === user.uid)) &&
           r.status !== 'cancelled',
@@ -178,21 +179,21 @@ export function ProfileDetailPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4] text-stone-900 flex flex-col">
+    <div className="min-h-screen bg-[#f8f7f4] dark:bg-slate-950 text-stone-900 dark:text-slate-100 flex flex-col">
       <DashboardNavbar />
 
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         {loading ? (
-          <div className="bg-white rounded-2xl p-10 shadow-sm flex items-center justify-center gap-3 text-sm text-stone-600">
-            <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" aria-hidden="true" />
+          <div className="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-10 shadow-sm dark:shadow-none flex items-center justify-center gap-3 text-sm text-stone-600 dark:text-slate-300">
+            <Loader2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400 animate-spin" aria-hidden="true" />
             <span>Loading profile details...</span>
           </div>
         ) : isUnavailable || !targetProfile || !comparison ? (
-          <div className="bg-white rounded-2xl p-8 sm:p-12 text-center shadow-[0_2px_18px_-4px_rgba(26,25,43,0.07)]">
-            <h1 className="font-display text-2xl font-bold text-indigo-950 mb-2">
+          <div className="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-8 sm:p-12 text-center shadow-[0_2px_18px_-4px_rgba(26,25,43,0.07)] dark:shadow-none">
+            <h1 className="font-display text-2xl font-bold text-indigo-950 dark:text-slate-100 mb-2">
               Profile not available
             </h1>
-            <p className="text-sm text-stone-600 max-w-md mx-auto leading-relaxed mb-6">
+            <p className="text-sm text-stone-600 dark:text-slate-300 max-w-md mx-auto leading-relaxed mb-6">
               This profile may be incomplete, blocked, or excluded based on your deal-breakers,
               gender preference, or budget range.
             </p>
@@ -210,7 +211,7 @@ export function ProfileDetailPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Link
                 to="/dashboard"
-                className="inline-flex items-center gap-2 text-sm font-semibold text-stone-700 hover:text-indigo-700 py-2"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-slate-200 hover:text-indigo-700 dark:hover:text-indigo-400 py-2"
               >
                 <ArrowLeft className="w-4 h-4" aria-hidden="true" />
                 <span>Back to matches</span>
@@ -220,7 +221,7 @@ export function ProfileDetailPage() {
                 <button
                   type="button"
                   onClick={() => setReportOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl border border-stone-200 bg-white text-xs font-semibold text-stone-700 hover:bg-stone-50 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-stone-700 dark:text-slate-200 hover:bg-stone-50 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   <Flag className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Report</span>
@@ -228,7 +229,7 @@ export function ProfileDetailPage() {
                 <button
                   type="button"
                   onClick={() => setBlockOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl border border-rose-200 bg-white text-xs font-semibold text-rose-700 hover:bg-rose-50 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl border border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-900 text-xs font-semibold text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 cursor-pointer"
                 >
                   <Ban className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Block</span>
@@ -237,7 +238,7 @@ export function ProfileDetailPage() {
             </div>
 
             {/* Header Card */}
-            <section className="bg-white rounded-2xl p-6 sm:p-8 shadow-[0_2px_18px_-4px_rgba(26,25,43,0.07)]">
+            <section className="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-[0_2px_18px_-4px_rgba(26,25,43,0.07)] dark:shadow-none">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
                 <div className="flex items-start gap-4 sm:gap-5">
                   <Avatar
@@ -247,19 +248,19 @@ export function ProfileDetailPage() {
                   />
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="font-display text-2xl sm:text-3xl font-bold text-indigo-950 tracking-tight">
+                      <h1 className="font-display text-2xl sm:text-3xl font-bold text-indigo-950 dark:text-slate-100 tracking-tight">
                         {targetProfile.basics.name}, {targetProfile.basics.age}
                       </h1>
                       {targetProfile.isDemo && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-semibold">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 text-xs font-semibold">
                           Demo profile
                         </span>
                       )}
                     </div>
-                    <p className="text-sm font-medium text-stone-700 mt-1">
+                    <p className="text-sm font-medium text-stone-700 dark:text-slate-200 mt-1">
                       {targetProfile.basics.college} · {targetProfile.basics.courseYear}
                     </p>
-                    <p className="text-xs sm:text-sm text-stone-500 mt-1">
+                    <p className="text-xs sm:text-sm text-stone-500 dark:text-slate-400 mt-1">
                       {GENDER_LABELS[targetProfile.basics.gender] || targetProfile.basics.gender} ·{' '}
                       {targetProfile.housing.preferredArea}, {targetProfile.housing.preferredCity}
                     </p>
@@ -272,47 +273,53 @@ export function ProfileDetailPage() {
               </div>
 
               {targetProfile.basics.bio && (
-                <p className="mt-5 text-sm sm:text-base text-stone-700 leading-relaxed">
+                <p className="mt-5 text-sm sm:text-base text-stone-700 dark:text-slate-300 leading-relaxed">
                   {targetProfile.basics.bio}
                 </p>
               )}
 
-              <div className="mt-5 pt-5 border-t border-stone-200/80 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+              <div className="mt-5 pt-5 border-t border-stone-200/80 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                 <div>
-                  <span className="text-xs text-stone-500 block">Monthly budget</span>
-                  <span className="font-semibold text-indigo-950 tabular-nums">
+                  <span className="text-xs text-stone-500 dark:text-slate-400 block">Monthly budget</span>
+                  <span className="font-semibold text-indigo-950 dark:text-slate-100 tabular-nums">
                     {formatINR(targetProfile.housing.budgetMin)} –{' '}
                     {formatINR(targetProfile.housing.budgetMax)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-xs text-stone-500 block">Move-in date</span>
-                  <span className="font-semibold text-indigo-950 tabular-nums">
+                  <span className="text-xs text-stone-500 dark:text-slate-400 block">Move-in date</span>
+                  <span className="font-semibold text-indigo-950 dark:text-slate-100 tabular-nums">
                     {targetProfile.housing.moveInDate}
                   </span>
                 </div>
                 <div>
-                  <span className="text-xs text-stone-500 block">Roommate preference</span>
-                  <span className="font-semibold text-indigo-950">
+                  <span className="text-xs text-stone-500 dark:text-slate-400 block">Gender preference</span>
+                  <span className="font-semibold text-indigo-950 dark:text-slate-100">
                     {targetProfile.housing.roommateGenderPref === 'same_gender'
                       ? 'Same gender only'
                       : 'Any gender'}
                   </span>
                 </div>
+                <div>
+                  <span className="text-xs text-stone-500 dark:text-slate-400 block">Roommates preferred</span>
+                  <span className="font-semibold text-indigo-950 dark:text-slate-100">
+                    {formatRoommateCountLabel(targetProfile.housing.roommateCount)}
+                  </span>
+                </div>
               </div>
 
               {/* Generated Compatibility Summary */}
-              <div className="mt-5 rounded-xl bg-indigo-50/70 px-4 py-3 text-sm text-indigo-950 font-medium">
+              <div className="mt-5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/50 border border-transparent dark:border-indigo-900/60 px-4 py-3 text-sm text-indigo-950 dark:text-indigo-100 font-medium">
                 {comparison.summary}
               </div>
 
               {/* Connect Request Box */}
-              <div className="mt-6 pt-5 border-t border-stone-200/80">
+              <div className="mt-6 pt-5 border-t border-stone-200/80 dark:border-slate-800">
                 {!activeRequest ? (
                   <div className="space-y-3">
                     <label
                       htmlFor="connect-message"
-                      className="block text-sm font-semibold text-indigo-950"
+                      className="block text-sm font-semibold text-indigo-950 dark:text-slate-100"
                     >
                       Send a connect request (optional note)
                     </label>
@@ -323,10 +330,10 @@ export function ProfileDetailPage() {
                       value={introMessage}
                       onChange={(e) => setIntroMessage(e.target.value)}
                       placeholder={`Say hi to ${targetProfile.basics.name.split(' ')[0]} and mention your move-in timeline...`}
-                      className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
+                      className="w-full rounded-xl border border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-stone-900 dark:text-slate-100 placeholder:text-stone-400 dark:placeholder:text-slate-500 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600"
                     />
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <span className="text-xs text-stone-500">
+                      <span className="text-xs text-stone-500 dark:text-slate-400">
                         {targetProfile.isDemo
                           ? 'Demo profile: auto-accepts after ~5 seconds so you can test chat.'
                           : 'Once accepted, direct chat unlocks for both of you.'}
@@ -348,7 +355,7 @@ export function ProfileDetailPage() {
                   </div>
                 ) : activeRequest.status === 'accepted' ? (
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                    <div className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
                       <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
                       <span>Connected with {targetProfile.basics.name}</span>
                     </div>
@@ -363,21 +370,21 @@ export function ProfileDetailPage() {
                 ) : activeRequest.status === 'pending' ? (
                   activeRequest.fromUserId === user?.uid ? (
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <span className="text-sm font-semibold text-amber-700">
+                      <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">
                         Connect request pending
                       </span>
                       <button
                         type="button"
                         onClick={() => handleUpdateRequest('cancelled')}
                         disabled={updatingRequest}
-                        className="px-4 py-2 min-h-[40px] rounded-xl border border-stone-200 text-sm font-semibold text-stone-700 hover:bg-stone-50 cursor-pointer"
+                        className="px-4 py-2 min-h-[40px] rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-stone-700 dark:text-slate-200 hover:bg-stone-50 dark:hover:bg-slate-700 cursor-pointer"
                       >
                         {updatingRequest ? 'Cancelling...' : 'Cancel request'}
                       </button>
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <span className="text-sm font-semibold text-indigo-950">
+                      <span className="text-sm font-semibold text-indigo-950 dark:text-slate-100">
                         {targetProfile.basics.name} sent you a connect request
                       </span>
                       <div className="flex items-center gap-2">
@@ -385,7 +392,7 @@ export function ProfileDetailPage() {
                           type="button"
                           onClick={() => handleUpdateRequest('declined')}
                           disabled={updatingRequest}
-                          className="px-4 py-2 min-h-[40px] rounded-xl border border-stone-200 text-sm font-semibold text-stone-700 hover:bg-stone-50 cursor-pointer"
+                          className="px-4 py-2 min-h-[40px] rounded-xl border border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-stone-700 dark:text-slate-200 hover:bg-stone-50 dark:hover:bg-slate-700 cursor-pointer"
                         >
                           Decline
                         </button>
@@ -401,7 +408,7 @@ export function ProfileDetailPage() {
                     </div>
                   )
                 ) : (
-                  <p className="text-sm font-medium text-stone-500">
+                  <p className="text-sm font-medium text-stone-500 dark:text-slate-400">
                     Connect request was declined.
                   </p>
                 )}
@@ -410,23 +417,23 @@ export function ProfileDetailPage() {
 
             {/* Best Matches & Things to Discuss */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <section className="bg-white rounded-2xl p-6 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)]">
-                <h2 className="font-display text-base font-bold text-indigo-950 mb-3">
+              <section className="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)] dark:shadow-none">
+                <h2 className="font-display text-base font-bold text-indigo-950 dark:text-slate-100 mb-3">
                   Best matches
                 </h2>
                 {bestMatches.length === 0 ? (
-                  <p className="text-sm text-stone-500">No exact trait matches found.</p>
+                  <p className="text-sm text-stone-500 dark:text-slate-400">No exact trait matches found.</p>
                 ) : (
                   <ul className="space-y-2.5">
                     {bestMatches.map((item) => (
                       <li key={item.key} className="flex items-start gap-2.5 text-sm">
                         <CheckCircle2
-                          className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5"
+                          className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5"
                           aria-hidden="true"
                         />
                         <div>
-                          <span className="font-semibold text-stone-900">{item.trait}: </span>
-                          <span className="text-stone-600">{item.theirAnswer}</span>
+                          <span className="font-semibold text-stone-900 dark:text-slate-100">{item.trait}: </span>
+                          <span className="text-stone-600 dark:text-slate-300">{item.theirAnswer}</span>
                         </div>
                       </li>
                     ))}
@@ -434,12 +441,12 @@ export function ProfileDetailPage() {
                 )}
               </section>
 
-              <section className="bg-white rounded-2xl p-6 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)]">
-                <h2 className="font-display text-base font-bold text-indigo-950 mb-3">
+              <section className="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)] dark:shadow-none">
+                <h2 className="font-display text-base font-bold text-indigo-950 dark:text-slate-100 mb-3">
                   Things to discuss
                 </h2>
                 {thingsToDiscuss.length === 0 ? (
-                  <p className="text-sm text-stone-500">
+                  <p className="text-sm text-stone-500 dark:text-slate-400">
                     Everything aligns—no major lifestyle differences!
                   </p>
                 ) : (
@@ -448,18 +455,18 @@ export function ProfileDetailPage() {
                       <li key={item.key} className="flex items-start gap-2.5 text-sm">
                         {item.status === 'partial' ? (
                           <CircleDot
-                            className="w-4 h-4 text-amber-500 shrink-0 mt-0.5"
+                            className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5"
                             aria-hidden="true"
                           />
                         ) : (
                           <XCircle
-                            className="w-4 h-4 text-rose-600 shrink-0 mt-0.5"
+                            className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5"
                             aria-hidden="true"
                           />
                         )}
                         <div>
-                          <span className="font-semibold text-stone-900">{item.trait}: </span>
-                          <span className="text-stone-600">
+                          <span className="font-semibold text-stone-900 dark:text-slate-100">{item.trait}: </span>
+                          <span className="text-stone-600 dark:text-slate-300">
                             You ({item.yourAnswer}) vs. Them ({item.theirAnswer})
                           </span>
                         </div>
@@ -471,8 +478,8 @@ export function ProfileDetailPage() {
             </div>
 
             {/* Trait-by-Trait Breakdown */}
-            <section className="bg-white rounded-2xl p-6 sm:p-8 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)]">
-              <h2 className="font-display text-lg font-bold text-indigo-950 mb-4">
+            <section className="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-[0_2px_16px_-4px_rgba(26,25,43,0.07)] dark:shadow-none">
+              <h2 className="font-display text-lg font-bold text-indigo-950 dark:text-slate-100 mb-4">
                 Lifestyle comparison
               </h2>
 
@@ -480,24 +487,24 @@ export function ProfileDetailPage() {
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-stone-200 text-xs font-semibold text-stone-500">
+                    <tr className="border-b border-stone-200 dark:border-slate-800 text-xs font-semibold text-stone-500 dark:text-slate-400">
                       <th className="py-3 pr-4">Trait</th>
                       <th className="py-3 pr-4">You</th>
                       <th className="py-3 pr-4">Them</th>
                       <th className="py-3 text-right">Result</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-stone-100">
+                  <tbody className="divide-y divide-stone-100 dark:divide-slate-800">
                     {comparison.breakdown.map((row) => (
                       <tr key={row.key}>
                         <td className="py-3.5 pr-4 align-top">
-                          <p className="text-sm font-semibold text-indigo-950">{row.trait}</p>
-                          <p className="text-xs text-stone-500 mt-0.5">{row.explanation}</p>
+                          <p className="text-sm font-semibold text-indigo-950 dark:text-slate-100">{row.trait}</p>
+                          <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">{row.explanation}</p>
                         </td>
-                        <td className="py-3.5 pr-4 text-sm text-stone-700 align-top whitespace-nowrap">
+                        <td className="py-3.5 pr-4 text-sm text-stone-700 dark:text-slate-300 align-top whitespace-nowrap">
                           {row.yourAnswer}
                         </td>
-                        <td className="py-3.5 pr-4 text-sm text-stone-700 align-top whitespace-nowrap">
+                        <td className="py-3.5 pr-4 text-sm text-stone-700 dark:text-slate-300 align-top whitespace-nowrap">
                           {row.theirAnswer}
                         </td>
                         <td className="py-3.5 text-right align-top">
@@ -505,25 +512,25 @@ export function ProfileDetailPage() {
                             {row.status === 'match' && (
                               <>
                                 <CheckCircle2
-                                  className="w-4 h-4 text-emerald-600"
+                                  className="w-4 h-4 text-emerald-600 dark:text-emerald-400"
                                   aria-hidden="true"
                                 />
-                                <span className="text-emerald-700">Match</span>
+                                <span className="text-emerald-700 dark:text-emerald-400">Match</span>
                               </>
                             )}
                             {row.status === 'partial' && (
                               <>
                                 <CircleDot
-                                  className="w-4 h-4 text-amber-500"
+                                  className="w-4 h-4 text-amber-500 dark:text-amber-400"
                                   aria-hidden="true"
                                 />
-                                <span className="text-amber-700">Partial</span>
+                                <span className="text-amber-700 dark:text-amber-400">Partial</span>
                               </>
                             )}
                             {row.status === 'mismatch' && (
                               <>
-                                <XCircle className="w-4 h-4 text-rose-600" aria-hidden="true" />
-                                <span className="text-rose-700">Mismatch</span>
+                                <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" aria-hidden="true" />
+                                <span className="text-rose-700 dark:text-rose-400">Mismatch</span>
                               </>
                             )}
                           </span>
@@ -537,41 +544,41 @@ export function ProfileDetailPage() {
               {/* Mobile Stacked Cards */}
               <div className="md:hidden space-y-3">
                 {comparison.breakdown.map((row) => (
-                  <div key={row.key} className="rounded-xl bg-[#f8f7f4] p-4 space-y-2">
+                  <div key={row.key} className="rounded-xl bg-[#f8f7f4] dark:bg-slate-800/70 p-4 space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-indigo-950">{row.trait}</p>
+                      <p className="text-sm font-semibold text-indigo-950 dark:text-slate-100">{row.trait}</p>
                       <span className="inline-flex items-center gap-1 text-xs font-semibold">
                         {row.status === 'match' && (
                           <>
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" aria-hidden="true" />
-                            <span className="text-emerald-700">Match</span>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                            <span className="text-emerald-700 dark:text-emerald-400">Match</span>
                           </>
                         )}
                         {row.status === 'partial' && (
                           <>
-                            <CircleDot className="w-4 h-4 text-amber-500" aria-hidden="true" />
-                            <span className="text-amber-700">Partial</span>
+                            <CircleDot className="w-4 h-4 text-amber-500 dark:text-amber-400" aria-hidden="true" />
+                            <span className="text-amber-700 dark:text-amber-400">Partial</span>
                           </>
                         )}
                         {row.status === 'mismatch' && (
                           <>
-                            <XCircle className="w-4 h-4 text-rose-600" aria-hidden="true" />
-                            <span className="text-rose-700">Mismatch</span>
+                            <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" aria-hidden="true" />
+                            <span className="text-rose-700 dark:text-rose-400">Mismatch</span>
                           </>
                         )}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
-                        <span className="text-stone-500 block">You</span>
-                        <span className="font-medium text-stone-800">{row.yourAnswer}</span>
+                        <span className="text-stone-500 dark:text-slate-400 block">You</span>
+                        <span className="font-medium text-stone-800 dark:text-slate-200">{row.yourAnswer}</span>
                       </div>
                       <div>
-                        <span className="text-stone-500 block">Them</span>
-                        <span className="font-medium text-stone-800">{row.theirAnswer}</span>
+                        <span className="text-stone-500 dark:text-slate-400 block">Them</span>
+                        <span className="font-medium text-stone-800 dark:text-slate-200">{row.theirAnswer}</span>
                       </div>
                     </div>
-                    <p className="text-xs text-stone-600">{row.explanation}</p>
+                    <p className="text-xs text-stone-600 dark:text-slate-300">{row.explanation}</p>
                   </div>
                 ))}
               </div>

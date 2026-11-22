@@ -34,13 +34,13 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center px-4 py-12">
-          <div className="max-w-md w-full bg-white rounded-2xl p-8 shadow-[0_4px_24px_-6px_rgba(26,25,43,0.08)] text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-rose-50 text-rose-600 mb-4">
+        <div className="min-h-screen bg-[#f8f7f4] dark:bg-slate-950 flex items-center justify-center px-4 py-12">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-8 shadow-[0_4px_24px_-6px_rgba(26,25,43,0.08)] dark:shadow-none text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 mb-4">
               <AlertCircle className="w-6 h-6" aria-hidden="true" />
             </div>
-            <h1 className="text-xl font-bold text-stone-900 mb-2">Something went wrong</h1>
-            <p className="text-sm text-stone-600 leading-relaxed mb-6">
+            <h1 className="text-xl font-bold text-stone-900 dark:text-slate-100 mb-2">Something went wrong</h1>
+            <p className="text-sm text-stone-600 dark:text-slate-300 leading-relaxed mb-6">
               We ran into an unexpected hiccup while loading Roomie. Refreshing the page usually clears this up.
             </p>
             <button

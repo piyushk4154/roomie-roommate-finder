@@ -2,7 +2,7 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "Registered student account and private PII metadata for Roomie.",
+      "description": "Registered student or property owner account and private PII metadata for Roomie.",
       "type": "object",
       "properties": {
         "uid": {
@@ -22,10 +22,19 @@
           "minLength": 5,
           "maxLength": 120
         },
+        "role": {
+          "type": "string",
+          "enum": ["student", "owner"]
+        },
         "college": {
           "type": "string",
-          "minLength": 2,
+          "minLength": 0,
           "maxLength": 120
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 25
         },
         "city": {
           "type": "string",
@@ -41,7 +50,42 @@
           "format": "date-time"
         }
       },
-      "required": ["uid", "name", "email", "college", "city", "createdAt", "updatedAt"]
+      "required": ["uid", "name", "email", "role", "city", "createdAt", "updatedAt"]
+    },
+    "OwnerPublicProfile": {
+      "title": "OwnerPublicProfile",
+      "description": "Publicly visible property owner display profile (contains no email or phone PII).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "city": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "bio": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "avatar": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "isDemo": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "city", "bio", "avatar", "isDemo", "updatedAt"]
     },
     "RoommateProfile": {
       "title": "RoommateProfile",
@@ -75,9 +119,64 @@
         "updatedAt"
       ]
     },
+    "Listing": {
+      "title": "Listing",
+      "description": "Property room/PG/flat/hostel listing created by a verified property owner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "title": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "propertyType": { "type": "string", "enum": ["single_room", "shared_room", "pg", "flat", "hostel"] },
+        "address": { "type": "object" },
+        "rentPerMonth": { "type": "number" },
+        "securityDeposit": { "type": "number" },
+        "totalBeds": { "type": "number" },
+        "availableBeds": { "type": "number" },
+        "genderAllowed": { "type": "string", "enum": ["boys", "girls", "any"] },
+        "furnished": { "type": "string", "enum": ["furnished", "semi", "unfurnished"] },
+        "amenities": { "type": "array" },
+        "houseRules": { "type": "object" },
+        "nearbyLandmark": { "type": "string", "maxLength": 120 },
+        "availableFrom": { "type": "string", "minLength": 4, "maxLength": 20 },
+        "description": { "type": "string", "maxLength": 500 },
+        "photoUrls": { "type": "array" },
+        "authorizedConfirmed": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["active", "paused", "rented"] },
+        "isDemo": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "ownerName",
+        "title",
+        "propertyType",
+        "address",
+        "rentPerMonth",
+        "securityDeposit",
+        "totalBeds",
+        "availableBeds",
+        "genderAllowed",
+        "furnished",
+        "amenities",
+        "houseRules",
+        "nearbyLandmark",
+        "availableFrom",
+        "description",
+        "photoUrls",
+        "authorizedConfirmed",
+        "status",
+        "isDemo",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
     "ConnectRequest": {
       "title": "ConnectRequest",
-      "description": "Roommate connection request between two students.",
+      "description": "Roommate connection request or student-to-owner listing enquiry.",
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
@@ -85,6 +184,9 @@
         "toUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "status": { "type": "string", "enum": ["pending", "accepted", "declined", "cancelled"] },
         "message": { "type": "string", "maxLength": 300 },
+        "listingId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingTitle": { "type": "string", "maxLength": 140 },
+        "ownerPhone": { "type": "string", "maxLength": 25 },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -92,12 +194,14 @@
     },
     "ChatThread": {
       "title": "ChatThread",
-      "description": "Conversation metadata between two accepted roommate connections.",
+      "description": "Conversation metadata between two accepted Roomie connections (student-student or student-owner).",
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "participantIds": { "type": "array" },
         "requestId": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingTitle": { "type": "string", "maxLength": 140 },
         "lastMessage": { "type": "string", "maxLength": 1000 },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -119,13 +223,26 @@
     },
     "SafetyReport": {
       "title": "SafetyReport",
-      "description": "User safety report submitted against another profile.",
+      "description": "Safety report submitted against a student profile, owner, or listing.",
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "byUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "targetUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "reason": { "type": "string", "enum": ["fake_profile", "harassment", "inappropriate_content", "other"] },
+        "listingId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetType": { "type": "string", "enum": ["user", "listing", "owner"] },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "fake_profile",
+            "harassment",
+            "inappropriate_content",
+            "misleading_listing",
+            "scam_deposit",
+            "already_rented",
+            "other"
+          ]
+        },
         "notes": { "type": "string", "maxLength": 500 },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -147,19 +264,27 @@
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "UserProfile" },
-      "description": "Owner-isolated student account records containing PII."
+      "description": "Owner-isolated student or property owner account records containing private PII (email, phone, role)."
+    },
+    "/ownerProfiles/{userId}": {
+      "schema": { "$ref": "OwnerPublicProfile" },
+      "description": "Public property owner display profiles (no email or phone PII)."
     },
     "/profiles/{userId}": {
       "schema": { "$ref": "RoommateProfile" },
-      "description": "Student roommate lifestyle profiles (readable by signed-in users when isComplete is true)."
+      "description": "Student roommate lifestyle profiles (only students may write; readable by signed-in users when isComplete is true)."
+    },
+    "/listings/{listingId}": {
+      "schema": { "$ref": "Listing" },
+      "description": "Property listings managed by property owners (only owners may write; active listings readable by signed-in users)."
     },
     "/requests/{requestId}": {
       "schema": { "$ref": "ConnectRequest" },
-      "description": "Roommate connection requests between students."
+      "description": "Roommate connection requests and student-owner listing enquiries."
     },
     "/chats/{chatId}": {
       "schema": { "$ref": "ChatThread" },
-      "description": "Accepted roommate conversation metadata."
+      "description": "Accepted Roomie conversation metadata."
     },
     "/messages/{messageId}": {
       "schema": { "$ref": "ChatMessage" },
@@ -167,7 +292,7 @@
     },
     "/reports/{reportId}": {
       "schema": { "$ref": "SafetyReport" },
-      "description": "Safety reports submitted by users."
+      "description": "Safety reports submitted against users or listings."
     },
     "/blocks/{blockId}": {
       "schema": { "$ref": "UserBlock" },

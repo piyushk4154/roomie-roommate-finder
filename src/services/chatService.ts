@@ -50,9 +50,9 @@ function isPermissionDenied(error: unknown): boolean {
   return code === 'permission-denied' || msg.includes('missing or insufficient permissions');
 }
 
-export function buildChatId(userA: string, userB: string): string {
+export function buildChatId(userA: string, userB: string, listingId?: string): string {
   const sorted = [userA, userB].sort();
-  return `${sorted[0]}__${sorted[1]}`;
+  return listingId ? `${sorted[0]}__${sorted[1]}__${listingId}` : `${sorted[0]}__${sorted[1]}`;
 }
 
 function isOfflineError(error: unknown): boolean {
@@ -72,7 +72,7 @@ export async function ensureChatForAcceptedRequest(
   initialMessage?: { senderId: string; text: string },
 ): Promise<ChatThread> {
   const sorted = [request.fromUserId, request.toUserId].sort() as [string, string];
-  const chatId = buildChatId(sorted[0], sorted[1]);
+  const chatId = buildChatId(sorted[0], sorted[1], request.listingId);
   const nowIso = new Date().toISOString();
   const initialLastMessage = initialMessage?.text || 'You are connected! Say hello.';
 
@@ -80,6 +80,8 @@ export async function ensureChatForAcceptedRequest(
     id: chatId,
     participantIds: sorted,
     requestId: request.id,
+    ...(request.listingId ? { listingId: request.listingId } : {}),
+    ...(request.listingTitle ? { listingTitle: request.listingTitle } : {}),
     lastMessage: initialLastMessage,
     updatedAt: nowIso,
   };
@@ -91,10 +93,12 @@ export async function ensureChatForAcceptedRequest(
     sorted.includes(auth.currentUser.uid)
   ) {
     const chatPath = `chats/${chatId}`;
-    const chatPayload = {
+    const chatPayload: Record<string, unknown> = {
       id: chatId,
       participantIds: sorted,
       requestId: request.id,
+      ...(request.listingId ? { listingId: request.listingId } : {}),
+      ...(request.listingTitle ? { listingTitle: request.listingTitle } : {}),
       lastMessage: initialLastMessage,
       updatedAt: serverTimestamp(),
     };
@@ -104,7 +108,6 @@ export async function ensureChatForAcceptedRequest(
       const existingSnap = await getDoc(chatRef);
       const existed = existingSnap.exists();
 
-      // Step 1: Ensure chat document exists in Firestore before any message write
       if (!existed) {
         await setDoc(chatRef, chatPayload);
       } else if (initialMessage) {
@@ -114,7 +117,6 @@ export async function ensureChatForAcceptedRequest(
         });
       }
 
-      // Step 2: Write optional initial message after chat document is committed
       if (initialMessage && !existed) {
         const msgPayload = {
           chatId,
@@ -154,7 +156,6 @@ export async function ensureChatForAcceptedRequest(
       if (!isOfflineError(error)) {
         throw error;
       }
-      // Fall through to localStorage fallback when offline
     }
   }
 
@@ -274,7 +275,6 @@ export async function markMessagesAsRead(
 
   if (isFirebaseConfigured && db && auth?.currentUser && auth.currentUser.uid === userId) {
     const firestoreDb = db;
-    // Update Firestore docs (skip any synthetic local-only IDs if present)
     const remoteUnread = unread.filter((m) => !m.id.startsWith('msg_'));
     if (remoteUnread.length > 0) {
       try {
@@ -343,6 +343,8 @@ export function subscribeToChats(
             id: String(data.id || d.id),
             participantIds: data.participantIds as [string, string],
             requestId: String(data.requestId),
+            ...(data.listingId ? { listingId: String(data.listingId) } : {}),
+            ...(data.listingTitle ? { listingTitle: String(data.listingTitle) } : {}),
             lastMessage: String(data.lastMessage || ''),
             updatedAt:
               data.updatedAt && typeof data.updatedAt.toDate === 'function'

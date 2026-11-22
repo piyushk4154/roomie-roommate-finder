@@ -11,6 +11,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, isFirebaseConfigured, OperationType } from './firebase';
+import { deleteOwnerPublicProfile } from './ownerProfileService';
 import { deleteLocalAndFirestoreProfile } from './profileService';
 import type { ReportReason, SafetyReport, UserBlock } from './types';
 
@@ -19,6 +20,7 @@ const BLOCKS_KEY = 'roomie_blocks_v1';
 const REQUESTS_KEY = 'roomie_requests_v1';
 const CHATS_KEY = 'roomie_chats_v1';
 const MESSAGES_KEY = 'roomie_messages_v1';
+const LISTINGS_KEY = 'roomie_listings_v1';
 
 const blockListeners = new Set<() => void>();
 
@@ -53,15 +55,23 @@ export async function submitReport(
   targetUserId: string,
   reason: ReportReason,
   notes: string,
+  options?: {
+    listingId?: string;
+    targetType?: 'user' | 'listing' | 'owner';
+  },
 ): Promise<SafetyReport> {
   const cleanNotes = notes.trim().slice(0, 500);
   const reportId = `rep_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
   const createdAtIso = new Date().toISOString();
+  const listingId = options?.listingId?.trim() || undefined;
+  const targetType = options?.targetType || (listingId ? 'listing' : 'user');
 
   const report: SafetyReport = {
     id: reportId,
     byUserId,
     targetUserId,
+    ...(listingId ? { listingId } : {}),
+    targetType,
     reason,
     notes: cleanNotes,
     createdAt: createdAtIso,
@@ -79,6 +89,8 @@ export async function submitReport(
         id: reportId,
         byUserId,
         targetUserId,
+        ...(listingId ? { listingId } : {}),
+        targetType,
         reason,
         notes: cleanNotes,
         createdAt: serverTimestamp(),
@@ -88,7 +100,6 @@ export async function submitReport(
       if (isPermissionDenied(error)) {
         handleFirestoreError(error, OperationType.WRITE, path);
       }
-      // Fall through to localStorage on offline errors
     }
   }
 
@@ -248,10 +259,13 @@ export function getBlockedUserIdSet(userId: string, blocks: UserBlock[]): Set<st
 }
 
 export async function deleteAccountAndData(userId: string): Promise<void> {
-  // 1. Delete profile (Firestore + localStorage)
-  await deleteLocalAndFirestoreProfile(userId);
+  // 1. Delete student/owner public profiles (localStorage + Firestore) BEFORE deleting users/{userId}
+  await Promise.all([
+    deleteLocalAndFirestoreProfile(userId),
+    deleteOwnerPublicProfile(userId),
+  ]);
 
-  // 2. Clean localStorage requests, chats, messages, blocks, fallback users
+  // 2. Clean localStorage requests, chats, messages, blocks, listings, fallback users
   const reqs = readJsonList<{ fromUserId: string; toUserId: string }>(REQUESTS_KEY).filter(
     (r) => r.fromUserId !== userId && r.toUserId !== userId,
   );
@@ -273,6 +287,16 @@ export async function deleteAccountAndData(userId: string): Promise<void> {
   writeJsonList(BLOCKS_KEY, blocks);
 
   try {
+    const rawListings = window.localStorage.getItem(LISTINGS_KEY);
+    if (rawListings) {
+      const parsed = JSON.parse(rawListings) as Record<string, { ownerId?: string }>;
+      const filtered: Record<string, { ownerId?: string }> = {};
+      Object.entries(parsed).forEach(([id, item]) => {
+        if (item.ownerId !== userId) filtered[id] = item;
+      });
+      window.localStorage.setItem(LISTINGS_KEY, JSON.stringify(filtered));
+    }
+
     const rawUsers = window.localStorage.getItem('roomie_fallback_users_v1');
     if (rawUsers) {
       const parsed = JSON.parse(rawUsers) as Array<{ uid: string }>;
@@ -286,15 +310,16 @@ export async function deleteAccountAndData(userId: string): Promise<void> {
     // Ignore storage cleanup errors
   }
 
-  // 3. Clean Firestore records owned by user
+  // 3. Clean Firestore records owned by user (listings BEFORE users doc)
   if (isFirebaseConfigured && db && auth?.currentUser && auth.currentUser.uid === userId) {
     try {
-      const [sentSnap, recSnap, chatSnap, msgSnap, blockSnap] = await Promise.all([
+      const [sentSnap, recSnap, chatSnap, msgSnap, blockSnap, listingSnap] = await Promise.all([
         getDocs(query(collection(db, 'requests'), where('fromUserId', '==', userId))),
         getDocs(query(collection(db, 'requests'), where('toUserId', '==', userId))),
         getDocs(query(collection(db, 'chats'), where('participantIds', 'array-contains', userId))),
         getDocs(query(collection(db, 'messages'), where('senderId', '==', userId))),
         getDocs(query(collection(db, 'blocks'), where('byUserId', '==', userId))),
+        getDocs(query(collection(db, 'listings'), where('ownerId', '==', userId))),
       ]);
 
       const deletions: Array<Promise<void>> = [];
@@ -303,8 +328,10 @@ export async function deleteAccountAndData(userId: string): Promise<void> {
       chatSnap.forEach((d) => deletions.push(deleteDoc(d.ref)));
       msgSnap.forEach((d) => deletions.push(deleteDoc(d.ref)));
       blockSnap.forEach((d) => deletions.push(deleteDoc(d.ref)));
-      deletions.push(deleteDoc(doc(db, 'users', userId)));
+      listingSnap.forEach((d) => deletions.push(deleteDoc(d.ref)));
       await Promise.all(deletions);
+
+      await deleteDoc(doc(db, 'users', userId));
     } catch (error) {
       if (isPermissionDenied(error)) {
         handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);

@@ -46,29 +46,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 : CheckCircle2;
           const styles =
             toast.tone === 'error'
-              ? 'bg-rose-50 border-rose-200 text-rose-900'
+              ? 'bg-rose-50 dark:bg-rose-950/90 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-100'
               : toast.tone === 'info'
-                ? 'bg-indigo-50 border-indigo-200 text-indigo-950'
-                : 'bg-white border-emerald-200 text-stone-900';
+                ? 'bg-indigo-50 dark:bg-indigo-950/90 border-indigo-200 dark:border-indigo-800 text-indigo-950 dark:text-indigo-100'
+                : 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-800 text-stone-900 dark:text-slate-100';
           const iconColor =
             toast.tone === 'error'
-              ? 'text-rose-600'
+              ? 'text-rose-600 dark:text-rose-400'
               : toast.tone === 'info'
-                ? 'text-indigo-600'
-                : 'text-emerald-600';
+                ? 'text-indigo-600 dark:text-indigo-400'
+                : 'text-emerald-600 dark:text-emerald-400';
 
           return (
             <div
               key={toast.id}
               role="status"
-              className={`pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-[0_10px_30px_-8px_rgba(26,25,43,0.16)] ${styles}`}
+              className={`pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-[0_10px_30px_-8px_rgba(26,25,43,0.16)] dark:shadow-xl ${styles}`}
             >
               <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${iconColor}`} aria-hidden="true" />
               <p className="text-sm font-medium flex-1 leading-snug">{toast.message}</p>
               <button
                 type="button"
                 onClick={() => dismiss(toast.id)}
-                className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
+                className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-slate-400 hover:text-stone-700 dark:hover:text-slate-200 hover:bg-stone-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 aria-label="Dismiss notification"
               >
                 <X className="w-4 h-4" />

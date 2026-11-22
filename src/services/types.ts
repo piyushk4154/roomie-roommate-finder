@@ -1,18 +1,26 @@
+export type AccountRole = 'student' | 'owner';
+
 export interface StudentUser {
   uid: string;
   name: string;
   email: string;
+  role: AccountRole;
   college: string;
   city: string;
+  phone?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
+export type AppUser = StudentUser;
+
 export interface SignUpInput {
+  role: AccountRole;
   name: string;
   email: string;
   password: string;
-  college: string;
+  college?: string;
+  phone?: string;
   city: string;
 }
 
@@ -21,8 +29,19 @@ export interface LoginInput {
   password: string;
 }
 
+export interface OwnerPublicProfile {
+  userId: string;
+  name: string;
+  city: string;
+  bio: string;
+  avatar: string;
+  isDemo: boolean;
+  updatedAt: string;
+}
+
 export type GenderOption = 'male' | 'female' | 'other' | 'prefer_not_to_say';
 export type RoommateGenderPref = 'any' | 'same_gender';
+export type RoommateCountPref = 1 | 2 | 3 | 4 | 'flexible';
 
 export type SmokingOption = 'never' | 'occasionally' | 'regularly';
 export type DrinkingOption = 'never' | 'socially' | 'regularly';
@@ -46,7 +65,8 @@ export type LifestyleTraitKey =
   | 'guests'
   | 'studyHabits'
   | 'diet'
-  | 'pets';
+  | 'pets'
+  | 'roommateCount';
 
 export type DealBreakerKey =
   | 'smoker'
@@ -56,7 +76,8 @@ export type DealBreakerKey =
   | 'frequent_guests'
   | 'non_veg_cooking'
   | 'pets'
-  | 'messy_roommate';
+  | 'messy_roommate'
+  | 'different_group_size';
 
 export interface ProfileBasics {
   name: string;
@@ -75,6 +96,7 @@ export interface ProfileHousing {
   preferredArea: string;
   moveInDate: string;
   roommateGenderPref: RoommateGenderPref;
+  roommateCount: RoommateCountPref;
 }
 
 export interface ProfileLifestyle {
@@ -107,6 +129,65 @@ export interface RoommateProfile {
   updatedAt: string;
 }
 
+export type PropertyType = 'single_room' | 'shared_room' | 'pg' | 'flat' | 'hostel';
+export type ListingGenderAllowed = 'boys' | 'girls' | 'any';
+export type FurnishedStatus = 'furnished' | 'semi' | 'unfurnished';
+export type ListingStatus = 'active' | 'paused' | 'rented';
+
+export type ListingAmenity =
+  | 'wifi'
+  | 'ac'
+  | 'meals'
+  | 'laundry'
+  | 'parking'
+  | 'power_backup'
+  | 'geyser'
+  | 'study_table'
+  | 'cctv'
+  | 'housekeeping';
+
+export interface ListingAddress {
+  street: string;
+  area: string;
+  city: string;
+  pincode: string;
+}
+
+export interface ListingHouseRules {
+  smokingAllowed: boolean;
+  drinkingAllowed: boolean;
+  guestsAllowed: boolean;
+  curfewTime: string;
+  vegOnly: boolean;
+  petsAllowed: boolean;
+}
+
+export interface Listing {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  title: string;
+  propertyType: PropertyType;
+  address: ListingAddress;
+  rentPerMonth: number;
+  securityDeposit: number;
+  totalBeds: number;
+  availableBeds: number;
+  genderAllowed: ListingGenderAllowed;
+  furnished: FurnishedStatus;
+  amenities: ListingAmenity[];
+  houseRules: ListingHouseRules;
+  nearbyLandmark: string;
+  availableFrom: string;
+  description: string;
+  photoUrls: string[];
+  authorizedConfirmed: boolean;
+  status: ListingStatus;
+  isDemo: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type RequestStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
 
 export interface ConnectRequest {
@@ -115,6 +196,9 @@ export interface ConnectRequest {
   toUserId: string;
   status: RequestStatus;
   message: string;
+  listingId?: string;
+  listingTitle?: string;
+  ownerPhone?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -123,6 +207,8 @@ export interface ChatThread {
   id: string;
   participantIds: [string, string];
   requestId: string;
+  listingId?: string;
+  listingTitle?: string;
   lastMessage: string;
   updatedAt: string;
 }
@@ -141,12 +227,17 @@ export type ReportReason =
   | 'fake_profile'
   | 'harassment'
   | 'inappropriate_content'
+  | 'misleading_listing'
+  | 'scam_deposit'
+  | 'already_rented'
   | 'other';
 
 export interface SafetyReport {
   id: string;
   byUserId: string;
   targetUserId: string;
+  listingId?: string;
+  targetType?: 'user' | 'listing' | 'owner';
   reason: ReportReason;
   notes: string;
   createdAt: string;
