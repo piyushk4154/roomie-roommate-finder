@@ -1,38 +1,33 @@
-# Roomie — College Roommate Matching
+# 🏠 Roomie
 
-Roomie helps college students find compatible roommates by matching lifestyle profiles, daily schedules, budgets, and shared-space boundaries.
+Find a roommate who fits your life.
 
-## Running Locally
+Roomie helps college students find compatible roommates by matching lifestyle profiles: smoking, drinking, sleep schedule, noise, cleanliness, guests, diet, pets and more.
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Start the development server on port 3000:
-   ```bash
-   npm run dev
-   ```
-3. Run the matching engine unit tests:
-   ```bash
-   npx tsx src/utils/matching.test.ts
-   ```
-4. Typecheck and build for production:
-   ```bash
-   npm run lint && npm run build
-   ```
+## Features
+- Email/password signup and login (Firebase Auth)
+- 6-step profile setup with importance ratings and deal-breakers
+- Smart matching: deal-breaker filter, then a weighted compatibility score
+- Match dashboard with filters (city, college, budget, gender, minimum score)
+- Trait-by-trait comparison with explanations
+- Connect requests and real-time chat
+- Report and block for safety
 
-## Firebase Configuration
+## How matching works
+1. **Deal-breakers:** incompatible pairs are removed completely (smoking, drinking, gender preference, budget overlap).
+2. **Weighted score:** each trait gets a similarity from 0 to 1, multiplied by the importance weight (1-5) you set.
+3. **Mutual score:** A's view of B and B's view of A are averaged.
 
-- Firebase web credentials and Firestore database ID live in `firebase-applet-config.json` at the project root (`src/services/firebase.ts` imports it directly).
-- Firestore schema blueprint is documented in `firebase-blueprint.json` and hardened access rules are in `firestore.rules`.
-- **Enabling Email/Password Authentication**:
-  1. Open the [Firebase Console](https://console.firebase.google.com/) for your project.
-  2. Navigate to **Authentication → Sign-in method**.
-  3. Click **Add new provider**, select **Email/Password**, toggle **Enable**, and save.
-  4. If Firebase Auth Email/Password is not enabled or Firebase is unavailable, Roomie automatically falls back to `localStorage` so signup, login, profile setup, matching, requests, and chat continue working seamlessly.
+## Tech stack
+React, TypeScript, Tailwind CSS, React Router, Firebase Auth, Firestore, Vite
 
-## How Demo Data Works
+## Run locally
+1. `npm install`
+2. Add your Firebase config (see `firebase-applet-config.json` or the config file in `src/services`)
+3. `npm run dev`
 
-- `src/data/demoProfiles.ts` defines 15 realistic Indian college student profiles (`isDemo: true`) across Indore, Bhopal, Pune, Delhi, Bengaluru, and Kota with INR budgets and varied lifestyle weights and deal-breakers.
-- On first dashboard load, `seedDemoProfiles()` (`src/services/profileService.ts`) seeds these demo profiles into local storage (`roomie_demo_profiles_v1`) and merges them with real completed profiles from Firestore.
-- When you send a connect request to a demo profile, it automatically accepts after ~5 seconds and sends a friendly welcome message so you can test the full Requests → Chat flow on your own.
+## Team
+Built for [Hackathon Name] by [Your Name / Team]
+
+## Live demo
+[your-link-here]
