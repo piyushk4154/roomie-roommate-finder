@@ -1,0 +1,6 @@
+{
+  "name": "Roomie",
+  "description": "Find a roommate who fits your life. Roomie helps college students find compatible roommates by matching lifestyle profiles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

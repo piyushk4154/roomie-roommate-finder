@@ -1,0 +1,411 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 260 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isDemoUserId(id) {
+      return isValidId(id) && id.matches('^demo_[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isDemoProfile(userId) {
+      return isDemoUserId(userId)
+        && exists(/databases/$(database)/documents/profiles/$(userId))
+        && get(/databases/$(database)/documents/profiles/$(userId)).data.isDemo == true;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'college', 'city', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'email', 'college', 'city', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 80
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 120
+        && data.college is string && data.college.size() >= 2 && data.college.size() <= 120
+        && data.city is string && data.city.size() >= 2 && data.city.size() <= 80
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBasics(b) {
+      return b is map
+        && b.keys().hasAll(['name', 'age', 'gender', 'college', 'courseYear', 'bio', 'avatar'])
+        && b.keys().hasOnly(['name', 'age', 'gender', 'college', 'courseYear', 'bio', 'avatar'])
+        && b.name is string && b.name.size() >= 2 && b.name.size() <= 80
+        && b.age is int && b.age >= 17 && b.age <= 35
+        && b.gender in ['male', 'female', 'other', 'prefer_not_to_say']
+        && b.college is string && b.college.size() >= 2 && b.college.size() <= 120
+        && b.courseYear is string && b.courseYear.size() >= 2 && b.courseYear.size() <= 80
+        && b.bio is string && b.bio.size() <= 200
+        && b.avatar is string && b.avatar.size() >= 1 && b.avatar.size() <= 40;
+    }
+
+    function isValidHousing(h) {
+      return h is map
+        && h.keys().hasAll(['budgetMin', 'budgetMax', 'preferredCity', 'preferredArea', 'moveInDate', 'roommateGenderPref'])
+        && h.keys().hasOnly(['budgetMin', 'budgetMax', 'preferredCity', 'preferredArea', 'moveInDate', 'roommateGenderPref'])
+        && h.budgetMin is int && h.budgetMin >= 2000 && h.budgetMin <= 40000
+        && h.budgetMax is int && h.budgetMax >= h.budgetMin && h.budgetMax <= 40000
+        && h.preferredCity is string && h.preferredCity.size() >= 2 && h.preferredCity.size() <= 80
+        && h.preferredArea is string && h.preferredArea.size() >= 1 && h.preferredArea.size() <= 120
+        && h.moveInDate is string && h.moveInDate.size() >= 4 && h.moveInDate.size() <= 20
+        && h.roommateGenderPref in ['any', 'same_gender'];
+    }
+
+    function isValidLifestyle(l) {
+      return l is map
+        && l.keys().hasAll([
+          'smoking', 'okayWithSmoker', 'drinking', 'okayWithDrinker',
+          'sleepSchedule', 'noiseLevel', 'headphoneUse', 'cleanliness',
+          'guests', 'studyHabits', 'diet', 'okayWithNonVegCooking', 'pets'
+        ])
+        && l.keys().hasOnly([
+          'smoking', 'okayWithSmoker', 'drinking', 'okayWithDrinker',
+          'sleepSchedule', 'noiseLevel', 'headphoneUse', 'cleanliness',
+          'guests', 'studyHabits', 'diet', 'okayWithNonVegCooking', 'pets'
+        ])
+        && l.smoking in ['never', 'occasionally', 'regularly']
+        && l.okayWithSmoker in ['yes', 'no']
+        && l.drinking in ['never', 'socially', 'regularly']
+        && l.okayWithDrinker in ['yes', 'no']
+        && l.sleepSchedule in ['early_bird', 'flexible', 'night_owl']
+        && l.noiseLevel in ['quiet', 'moderate', 'loud']
+        && l.headphoneUse in ['always', 'sometimes', 'never']
+        && l.cleanliness is int && l.cleanliness >= 1 && l.cleanliness <= 5
+        && l.guests in ['never', 'sometimes', 'often']
+        && l.studyHabits in ['silence', 'background_noise', 'outside']
+        && l.diet in ['vegetarian', 'eggetarian', 'non_vegetarian']
+        && l.okayWithNonVegCooking in ['yes', 'no']
+        && l.pets in ['has_pet', 'likes_pets', 'dislikes_allergic'];
+    }
+
+    function isValidWeight(w) {
+      return w is int && w >= 1 && w <= 5;
+    }
+
+    function isValidImportance(imp) {
+      return imp is map
+        && imp.keys().hasAll([
+          'smoking', 'drinking', 'sleepSchedule', 'noiseLevel', 'headphoneUse',
+          'cleanliness', 'guests', 'studyHabits', 'diet', 'pets'
+        ])
+        && imp.keys().hasOnly([
+          'smoking', 'drinking', 'sleepSchedule', 'noiseLevel', 'headphoneUse',
+          'cleanliness', 'guests', 'studyHabits', 'diet', 'pets'
+        ])
+        && isValidWeight(imp.smoking)
+        && isValidWeight(imp.drinking)
+        && isValidWeight(imp.sleepSchedule)
+        && isValidWeight(imp.noiseLevel)
+        && isValidWeight(imp.headphoneUse)
+        && isValidWeight(imp.cleanliness)
+        && isValidWeight(imp.guests)
+        && isValidWeight(imp.studyHabits)
+        && isValidWeight(imp.diet)
+        && isValidWeight(imp.pets);
+    }
+
+    function isValidDealBreakers(dbList) {
+      return dbList is list
+        && dbList.size() <= 8
+        && dbList.hasOnly([
+          'smoker', 'drinker', 'loud_noise', 'night_owl',
+          'frequent_guests', 'non_veg_cooking', 'pets', 'messy_roommate'
+        ]);
+    }
+
+    function isValidProfile(data) {
+      return data.keys().hasAll(['userId', 'basics', 'housing', 'lifestyle', 'importance', 'dealBreakers', 'isComplete', 'isDemo', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'basics', 'housing', 'lifestyle', 'importance', 'dealBreakers', 'isComplete', 'isDemo', 'updatedAt'])
+        && isValidId(data.userId)
+        && isValidBasics(data.basics)
+        && isValidHousing(data.housing)
+        && isValidLifestyle(data.lifestyle)
+        && isValidImportance(data.importance)
+        && isValidDealBreakers(data.dealBreakers)
+        && data.isComplete is bool
+        && data.isDemo is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRequest(data) {
+      return data.keys().hasAll(['id', 'fromUserId', 'toUserId', 'status', 'message', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'fromUserId', 'toUserId', 'status', 'message', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.fromUserId)
+        && isValidId(data.toUserId)
+        && data.status in ['pending', 'accepted', 'declined', 'cancelled']
+        && data.message is string && data.message.size() <= 300
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidParticipants(p) {
+      return p is list
+        && p.size() == 2
+        && isValidId(p[0])
+        && isValidId(p[1])
+        && p[0] != p[1];
+    }
+
+    function isAcceptedConnection(requestId, participantIds) {
+      return exists(/databases/$(database)/documents/requests/$(requestId))
+        && get(/databases/$(database)/documents/requests/$(requestId)).data.status == 'accepted'
+        && get(/databases/$(database)/documents/requests/$(requestId)).data.fromUserId in participantIds
+        && get(/databases/$(database)/documents/requests/$(requestId)).data.toUserId in participantIds;
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['id', 'participantIds', 'requestId', 'lastMessage', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'participantIds', 'requestId', 'lastMessage', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidParticipants(data.participantIds)
+        && isValidId(data.requestId)
+        && data.lastMessage is string && data.lastMessage.size() <= 1000
+        && data.updatedAt is timestamp;
+    }
+
+    function isChatParticipant(chatId) {
+      return isValidId(chatId)
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['chatId', 'participantIds', 'senderId', 'text', 'timestamp', 'readBy'])
+        && data.keys().hasOnly(['chatId', 'participantIds', 'senderId', 'text', 'timestamp', 'readBy'])
+        && isValidId(data.chatId)
+        && isValidParticipants(data.participantIds)
+        && isValidId(data.senderId)
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
+        && data.timestamp is timestamp
+        && data.readBy is list && data.readBy.size() <= 2 && (data.readBy.size() == 0 || data.readBy[0] is string);
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll(['id', 'byUserId', 'targetUserId', 'reason', 'notes', 'createdAt'])
+        && data.keys().hasOnly(['id', 'byUserId', 'targetUserId', 'reason', 'notes', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.byUserId)
+        && isValidId(data.targetUserId)
+        && data.reason in ['fake_profile', 'harassment', 'inappropriate_content', 'other']
+        && data.notes is string && data.notes.size() <= 500
+        && data.createdAt is timestamp;
+    }
+
+    function isValidBlock(data) {
+      return data.keys().hasAll(['id', 'byUserId', 'targetUserId', 'createdAt'])
+        && data.keys().hasOnly(['id', 'byUserId', 'targetUserId', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.byUserId)
+        && isValidId(data.targetUserId)
+        && data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUser(incoming())
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUser(incoming())
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'college', 'city', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(userId) && isOwner(userId);
+    }
+
+    match /profiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId)
+        && (
+          isOwner(userId)
+          || (resource == null && isDemoUserId(userId))
+          || (resource != null && existing().isComplete == true)
+        );
+      allow list: if isSignedIn() && resource.data.isComplete == true;
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && isValidProfile(incoming())
+        && incoming().userId == userId
+        && incoming().updatedAt == request.time
+        && (
+          (isOwner(userId) && incoming().isDemo == false)
+          || (isDemoUserId(userId) && incoming().isDemo == true && incoming().isComplete == true)
+        );
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidProfile(incoming())
+        && incoming().userId == existing().userId
+        && incoming().isDemo == existing().isDemo
+        && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn() && isValidId(userId) && isOwner(userId);
+    }
+
+    match /requests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId)
+        && (
+          (resource == null && request.auth.uid in requestId.split('__'))
+          || (resource != null && (existing().fromUserId == request.auth.uid || existing().toUserId == request.auth.uid))
+        );
+      allow list: if isSignedIn()
+        && (resource.data.fromUserId == request.auth.uid || resource.data.toUserId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(requestId)
+        && isValidRequest(incoming())
+        && incoming().id == requestId
+        && incoming().fromUserId == request.auth.uid
+        && incoming().toUserId != request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(requestId)
+        && isValidRequest(incoming())
+        && incoming().id == existing().id
+        && incoming().fromUserId == existing().fromUserId
+        && incoming().toUserId == existing().toUserId
+        && incoming().updatedAt == request.time
+        && (
+          // Standard pending state transitions
+          (
+            existing().status == 'pending'
+            && incoming().message == existing().message
+            && incoming().createdAt == existing().createdAt
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && (
+              (request.auth.uid == existing().toUserId && (incoming().status == 'accepted' || incoming().status == 'declined'))
+              || (request.auth.uid == existing().fromUserId && incoming().status == 'cancelled')
+              || (request.auth.uid == existing().fromUserId && incoming().status == 'accepted' && isDemoProfile(existing().toUserId))
+            )
+          )
+          // Re-sending a previously cancelled request from the original sender
+          || (
+            existing().status == 'cancelled'
+            && request.auth.uid == existing().fromUserId
+            && incoming().status == 'pending'
+            && incoming().createdAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'message', 'createdAt', 'updatedAt'])
+          )
+        );
+      allow delete: if isSignedIn() && isValidId(requestId)
+        && (existing().fromUserId == request.auth.uid || existing().toUserId == request.auth.uid);
+    }
+
+    match /chats/{chatId} {
+      allow get: if isSignedIn() && isValidId(chatId)
+        && (
+          (resource == null && request.auth.uid in chatId.split('__'))
+          || (resource != null && request.auth.uid in existing().participantIds)
+        );
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participantIds;
+      allow create: if isSignedIn()
+        && isValidId(chatId)
+        && isValidChat(incoming())
+        && incoming().id == chatId
+        && request.auth.uid in incoming().participantIds
+        && incoming().updatedAt == request.time
+        && isAcceptedConnection(incoming().requestId, incoming().participantIds);
+      allow update: if isSignedIn()
+        && isValidId(chatId)
+        && isValidChat(incoming())
+        && request.auth.uid in existing().participantIds
+        && incoming().id == existing().id
+        && incoming().participantIds == existing().participantIds
+        && incoming().requestId == existing().requestId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'updatedAt'])
+        && isAcceptedConnection(existing().requestId, existing().participantIds);
+      allow delete: if isSignedIn() && isValidId(chatId) && request.auth.uid in existing().participantIds;
+    }
+
+    match /messages/{messageId} {
+      allow get: if isSignedIn() && isValidId(messageId) && resource != null && request.auth.uid in existing().participantIds;
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participantIds;
+      allow create: if isSignedIn()
+        && isValidId(messageId)
+        && isValidMessage(incoming())
+        && incoming().timestamp == request.time
+        && isChatParticipant(incoming().chatId)
+        && incoming().participantIds == get(/databases/$(database)/documents/chats/$(incoming().chatId)).data.participantIds
+        && (
+          incoming().senderId == request.auth.uid
+          || (
+            incoming().senderId in incoming().participantIds
+            && isDemoProfile(incoming().senderId)
+          )
+        );
+      allow update: if isSignedIn()
+        && isValidId(messageId)
+        && isValidMessage(incoming())
+        && request.auth.uid in existing().participantIds
+        && incoming().chatId == existing().chatId
+        && incoming().senderId == existing().senderId
+        && incoming().text == existing().text
+        && incoming().timestamp == existing().timestamp
+        && incoming().participantIds == existing().participantIds
+        && incoming().diff(existing()).affectedKeys().hasOnly(['readBy']);
+      allow delete: if isSignedIn() && isValidId(messageId) && existing().senderId == request.auth.uid;
+    }
+
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && existing().byUserId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.byUserId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isValidId(reportId)
+        && isValidReport(incoming())
+        && incoming().id == reportId
+        && incoming().byUserId == request.auth.uid
+        && incoming().targetUserId != request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /blocks/{blockId} {
+      allow get: if isSignedIn() && isValidId(blockId)
+        && (existing().byUserId == request.auth.uid || existing().targetUserId == request.auth.uid);
+      allow list: if isSignedIn()
+        && (resource.data.byUserId == request.auth.uid || resource.data.targetUserId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(blockId)
+        && isValidBlock(incoming())
+        && incoming().id == blockId
+        && incoming().byUserId == request.auth.uid
+        && incoming().targetUserId != request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(blockId) && existing().byUserId == request.auth.uid;
+    }
+  }
+}

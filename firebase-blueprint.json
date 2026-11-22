@@ -1,0 +1,177 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered student account and private PII metadata for Roomie.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 5,
+          "maxLength": 120
+        },
+        "college": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "city": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "name", "email", "college", "city", "createdAt", "updatedAt"]
+    },
+    "RoommateProfile": {
+      "title": "RoommateProfile",
+      "description": "Publicly matchable student lifestyle profile (contains no email or phone PII).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "basics": { "type": "object" },
+        "housing": { "type": "object" },
+        "lifestyle": { "type": "object" },
+        "importance": { "type": "object" },
+        "dealBreakers": { "type": "array" },
+        "isComplete": { "type": "boolean" },
+        "isDemo": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "basics",
+        "housing",
+        "lifestyle",
+        "importance",
+        "dealBreakers",
+        "isComplete",
+        "isDemo",
+        "updatedAt"
+      ]
+    },
+    "ConnectRequest": {
+      "title": "ConnectRequest",
+      "description": "Roommate connection request between two students.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fromUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "toUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined", "cancelled"] },
+        "message": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "fromUserId", "toUserId", "status", "message", "createdAt", "updatedAt"]
+    },
+    "ChatThread": {
+      "title": "ChatThread",
+      "description": "Conversation metadata between two accepted roommate connections.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "participantIds": { "type": "array" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "lastMessage": { "type": "string", "maxLength": 1000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "participantIds", "requestId", "lastMessage", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual message inside a Roomie chat.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "participantIds": { "type": "array" },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "readBy": { "type": "array" }
+      },
+      "required": ["chatId", "participantIds", "senderId", "text", "timestamp", "readBy"]
+    },
+    "SafetyReport": {
+      "title": "SafetyReport",
+      "description": "User safety report submitted against another profile.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "byUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reason": { "type": "string", "enum": ["fake_profile", "harassment", "inappropriate_content", "other"] },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "byUserId", "targetUserId", "reason", "notes", "createdAt"]
+    },
+    "UserBlock": {
+      "title": "UserBlock",
+      "description": "Block relationship preventing visibility and interaction between two users.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "byUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "byUserId", "targetUserId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "UserProfile" },
+      "description": "Owner-isolated student account records containing PII."
+    },
+    "/profiles/{userId}": {
+      "schema": { "$ref": "RoommateProfile" },
+      "description": "Student roommate lifestyle profiles (readable by signed-in users when isComplete is true)."
+    },
+    "/requests/{requestId}": {
+      "schema": { "$ref": "ConnectRequest" },
+      "description": "Roommate connection requests between students."
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "ChatThread" },
+      "description": "Accepted roommate conversation metadata."
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "ChatMessage" },
+      "description": "Messages belonging to an accepted Roomie chat."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "SafetyReport" },
+      "description": "Safety reports submitted by users."
+    },
+    "/blocks/{blockId}": {
+      "schema": { "$ref": "UserBlock" },
+      "description": "User block records."
+    }
+  }
+}
